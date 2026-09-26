@@ -1352,7 +1352,21 @@ function rbcSpr(r){ const k=Math.round(r*10); let c=_rbcC.get(k);
     const x=c.getContext('2d'); x.translate(S/2,S/2); x.beginPath(); x.ellipse(0,0,R,R*.8,0,0,Math.PI*2); const g=x.createRadialGradient(0,0,R*.1,0,0,R);
     g.addColorStop(0,'#5a0a18');g.addColorStop(.45,'#a3162b');g.addColorStop(.85,'#e0344a');g.addColorStop(1,'#7a0f1e'); x.fillStyle=g; x.fill(); _rbcC.set(k,c); }
   return c; }
+// ---- 軽量モード：遠景の背景は2フレームに1回だけ描き直し、間のフレームは前回の絵を貼る ----
+// 描かないフレームでも「動きの計算」だけは行うので、星や赤血球の流れる速さは変わらない。
+const _nop=()=>{}, _gradStub={addColorStop:_nop};
+const _stubCtx=new Proxy({},{ get(o,k){ if(k in o)return o[k]; if(k==='createRadialGradient'||k==='createLinearGradient'||k==='createPattern')return ()=>_gradStub; if(k==='measureText')return ()=>({width:0}); return _nop; }, set(o,k,v){ o[k]=v; return true; } });
+let _bgCv=null, _bgCtx=null, _bgN=0;
 function drawBackground(){
+  if(!LQ||bgPreview||!(state==='play'||state==='boss'||state==='clear')) return drawBackground0();
+  const w=Math.round(W*RS), h=Math.round(H*RS);
+  if(!_bgCv||_bgCv.width!==w){ _bgCv=document.createElement('canvas'); _bgCv.width=w; _bgCv.height=h; _bgCtx=_bgCv.getContext('2d'); _bgN=0; }
+  const m=ctx;
+  if(_bgN++%2===0){ ctx=_bgCtx; ctx.setTransform(RS,0,0,RS,0,0); ctx.globalAlpha=1; ctx.shadowBlur=0; }
+  else ctx=_stubCtx;
+  try{ drawBackground0(); } finally { ctx=m; }
+  ctx.drawImage(_bgCv,0,0,W,H); }
+function drawBackground0(){
   if(stage===2)return drawLungBg();
   if(stage===3)return drawGutBg();
   if(stage===4)return drawLiverBg();
