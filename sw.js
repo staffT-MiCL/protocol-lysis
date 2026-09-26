@@ -1,11 +1,12 @@
 // GaaaaaaS VADER Ⅱ Service Worker
 // ゲームを更新したら CACHE の番号を上げてください（例: v2 → v3）。
-const CACHE = 'vader2-v29';
+const CACHE = 'vader2-v30';
 const CORE = ['./', './index.html', './manifest.json',
-  './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png'];
+  './icons/icon-192.png', './icons/icon-512.png', './icons/icon-maskable-512.png', './icons/apple-touch-icon.png'];
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(CORE)).then(() => self.skipWaiting()));
+  // アイコンが1つ欠けていても、残りは保存できるように1つずつ追加する
+  e.waitUntil(caches.open(CACHE).then(c => Promise.all(CORE.map(u => c.add(u).catch(() => {})))).then(() => self.skipWaiting()));
 });
 self.addEventListener('activate', e => {
   e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k))))
@@ -27,5 +28,5 @@ self.addEventListener('fetch', e => {
   e.respondWith(caches.match(req).then(hit => hit || fetch(req).then(r => {
     if (r.ok || r.type === 'opaque') { const cp = r.clone(); caches.open(CACHE).then(c => c.put(req, cp)); }
     return r;
-  }).catch(() => hit)));
+  }).catch(() => new Response('', { status: 504, statusText: 'offline' }))));   // 圏外で未保存のファイルは空の応答を返す（エラーにしない）
 });

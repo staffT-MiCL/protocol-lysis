@@ -136,6 +136,9 @@
   #formBar button.cool{opacity:.55}
   #formBar .gauge{position:absolute;left:0;bottom:0;height:3px;width:0;background:#ffd23e}
   #hud.hidden~#formBar{display:none}
+  /* ショップ中：画面に出ている情報（SCORE・CREDIT・武器・装備）はHUDから外し、残機と一時停止だけ残す */
+  body.inShop #hud>span:not(.keep){display:none}
+  body.inShop #pauseBtn{margin-left:auto}
   #test{position:absolute;left:12px;bottom:62px;display:flex;gap:6px;align-items:center;font-size:13px;color:var(--dim);flex-wrap:wrap}
   /* デバッグパネルの表示／非表示：隠している間は切替ボタンだけを、右側（ショップのCREDITと機体の枠の間のすき間）に小さく残す */
   #test #dbgTog{margin-left:auto;border-color:#ffd23e;color:#ffd23e}
@@ -199,6 +202,11 @@
   /* CONTINUEの確認モーダル */
   #runInfo{display:grid;grid-template-columns:auto auto;gap:6px 22px;font-size:18px;color:#e9e4ff;margin:4px 0 8px;text-align:left}
   #runInfo span:nth-child(odd){color:var(--dim)}
+  /* クレジット：上下の線のちょうど中間に文字が来るように、段落の余白をなくして線の上下の間隔をそろえる */
+  #credits{padding-top:0!important}
+  #credits p{margin:0!important;line-height:1.4!important}
+  #credits .line{margin:7px auto!important}
+  @media (max-height:430px){ #credits .line{margin:4px auto!important} }
 </style>
 </head>
 <body>
@@ -214,7 +222,7 @@
   <div id="hud" class="hidden">
     <span id="stageName">STAGE 1 血流星雲</span>
     <span>SCORE <b id="score">0</b></span>
-    <span>残機 <b id="lives">3</b></span>
+    <span class="keep">残機 <b id="lives">3</b></span>
     <span>POWER <b id="weapon">NORMAL</b></span>
     <span class="grow"><div id="bar"><i id="barFill"></i></div></span>
     <button id="pauseBtn" aria-label="一時停止"><svg class="ic" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1" fill="currentColor"/><rect x="14" y="5" width="4" height="14" rx="1" fill="currentColor"/></svg></button>
@@ -271,7 +279,7 @@
       スマホ：画面をドラッグで移動（押している間は自動連射）</p>
     <div id="credits">
       <div class="line"></div>
-      <p>Created by スタッフT<br>Powered by GAS &amp; Web Audio</p>
+      <p>Created by スタッフT ©</p>
       <div class="line"></div>
     </div>
     </div>
@@ -1272,12 +1280,13 @@ function startSuperBossBGM(){ initAudio(); if(isBgmPlaying&&currentBgmType==='su
 function bvd(f,d,when,v=.05,cut=900){ if(!ac||!f)return; const o=ac.createOscillator(),pre=ac.createGain(),ws=ac.createWaveShaper(),fl=ac.createBiquadFilter(),g=ac.createGain();
   o.type='sawtooth'; o.frequency.setValueAtTime(f,when); pre.gain.value=2.5; ws.curve=distCurve; fl.type='lowpass'; fl.Q.value=2; fl.frequency.setValueAtTime(cut,when);
   g.gain.setValueAtTime(.0001,when); g.gain.exponentialRampToValueAtTime(v,when+.004); g.gain.exponentialRampToValueAtTime(.0005,when+d);
-  o.connect(pre); pre.connect(ws); ws.connect(fl); fl.connect(g); g.connect(bgmGain); o.start(when); o.stop(when+d+.05); }
+  o.connect(pre); pre.connect(ws); ws.connect(fl); fl.connect(g); g.connect(bgmOut||bgmGain); o.start(when); o.stop(when+d+.05); }
 function startBoss2BGM(){ initAudio(); if(demo)return; if(isBgmPlaying&&currentBgmType==='boss2')return; stopBGM(); isBgmPlaying=true; currentBgmType='boss2';
   // 切り替わりの演出：低い衝撃音 → 1小節かけてせり上がるノイズ
   const now=ac.currentTime+.02, BAR=60/165*4;
-  bKick(now,.4); bv(55,1.2,now,{type:'sine',v:.12,f2:30,atk:.005}); bn(1.2,now,{v:.08,f1:2500,f2:200,ft:'lowpass'});
-  bn(BAR,now,{v:.02,f1:300,f2:6000,ft:'bandpass',q:2}); bv(hz(38),BAR,now,{v:.04,f2:hz(50),cut:600,cutEnd:3000,q:6,atk:BAR*.8});
+  const ib=persistNode(ac.createGain()); ib.connect(bgmGain); bgmBuses.push(ib); bgmOut=ib;   // 切り替え演出も曲専用の出力へ（曲を止めたらすぐ消える）
+  try{ bKick(now,.4); bv(55,1.2,now,{type:'sine',v:.12,f2:30,atk:.005}); bn(1.2,now,{v:.08,f1:2500,f2:200,ft:'lowpass'});
+  bn(BAR,now,{v:.02,f1:300,f2:6000,ft:'bandpass',q:2}); bv(hz(38),BAR,now,{v:.04,f2:hz(50),cut:600,cutEnd:3000,q:6,atk:BAR*.8}); } finally { bgmOut=null; }
   const roots=[38,39,38,37];                                   // D / E♭ / D / C#
   const bpat=[0,0,0,12, 0,0,0,12, 0,0,1,0, 0,12,0,1];
   const stab=[[50,53,57,51],[51,54,58,52],[50,53,56,51],[49,53,56,50]];
@@ -1517,6 +1526,12 @@ function radSpr(x,y,r,c0,c1){ const k=c0+'|'+c1+'|'+r; let c=_radC.get(k);
   if(!c){ if(_radC.size>120)_radC.clear(); const S=Math.ceil(r*2); c=document.createElement('canvas'); c.width=c.height=S;
     const g2=c.getContext('2d'), g=g2.createRadialGradient(r,r,0,r,r,r); g.addColorStop(0,c0); g.addColorStop(1,c1); g2.fillStyle=g; g2.fillRect(0,0,S,S); _radC.set(k,c); }
   ctx.drawImage(c,x-r,y-r); }
+// 立体感のある小さな玉（左上が明るい）を1回だけ描いて使い回す。14px四方、中心に半径rの玉
+const _ballC=new Map();
+function ballSpr(r,c0,c1){ const k=r+'|'+c0+'|'+c1; let c=_ballC.get(k);
+  if(!c){ if(_ballC.size>60)_ballC.clear(); c=document.createElement('canvas'); c.width=c.height=14; const g2=c.getContext('2d'), g=g2.createRadialGradient(6,6,0,7,7,6);
+    g.addColorStop(0,c0); g.addColorStop(1,c1); g2.fillStyle=g; g2.beginPath(); g2.arc(7,7,r,0,7); g2.fill(); _ballC.set(k,c); }
+  return c; }
 const _rbcC=new Map();
 function rbcSpr(r){ const k=Math.round(r*10); let c=_rbcC.get(k);
   if(!c){ if(_rbcC.size>200)_rbcC.clear(); const R=k/10, S=Math.ceil(R*2)+4; c=document.createElement('canvas'); c.width=c.height=S;
@@ -1915,6 +1930,10 @@ function drawMero(e){ ctx.save(); ctx.translate(e.x,e.y); ctx.rotate(Math.atan2(
   ctx.fillStyle='#c070ff'; ctx.beginPath(); ctx.ellipse(0,0,8,5,0,0,Math.PI*2); ctx.fill(); ctx.fillStyle='#5a1a8a'; ctx.beginPath(); ctx.arc(2,0,2,0,Math.PI*2); ctx.fill(); ctx.restore(); }
 function drawGlucose(p){ ctx.save(); ctx.translate(p.x,p.y); ctx.rotate(t*.04); ctx.shadowColor='#ffe066'; ctx.shadowBlur=12;
   ctx.strokeStyle='#ffe066'; ctx.lineWidth=2.5; hexPath(0,0,10); ctx.stroke(); ctx.shadowBlur=0; ctx.fillStyle='#fff6c0'; ctx.beginPath(); ctx.arc(0,0,3,0,Math.PI*2); ctx.fill(); ctx.restore(); }
+// ---- 記号は絵文字にせず図形で描く（端末によって絵文字に化けるのを防ぐ） ----
+const STAR_SVG='<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2.2l2.95 6.3 6.85.8-5.05 4.72 1.33 6.8L12 17.4l-6.08 3.42 1.33-6.8L2.2 9.3l6.85-.8z"/></svg>';
+function cvStar(x,y,r,col){ ctx.fillStyle=col; ctx.beginPath(); for(let i=0;i<10;i++){ const a=-Math.PI/2+i*Math.PI/5, rr=i%2?r*.45:r; ctx.lineTo(x+Math.cos(a)*rr,y+Math.sin(a)*rr); } ctx.closePath(); ctx.fill(); }
+function cvTri(x,y,s,col){ ctx.fillStyle=col; ctx.beginPath(); ctx.moveTo(x-s*.45,y-s*.55); ctx.lineTo(x+s*.55,y); ctx.lineTo(x-s*.45,y+s*.55); ctx.closePath(); ctx.fill(); }   // 右向きの三角
 function addFloater(x,y,text,c='#ffe6a0'){ floaters.push({x,y,text,c,life:60}); }
 function buildEvents4(){
   const ev=[];
@@ -2120,7 +2139,7 @@ function drawLymphE(e){ ctx.save(); ctx.translate(e.x,e.y); const f=e.flash>0;
   ctx.fillStyle='#6a4a9e'; ctx.beginPath(); ctx.arc(1,-.5,e.r*.68,0,7); ctx.fill(); ctx.restore(); }
 // ---- 皮質：抗体と「標識」 ----
 let mark7=0, markTalk7=false;
-const AB_LIFE=300, AB_MAX=60;   // 抗体の寿命（5秒）と、画面に同時に出せる上限（多すぎると処理が重くなるため）
+const AB_LIFE=300, AB_MAX=36;   // 抗体の寿命（5秒）と、画面に同時に出せる上限（多すぎると処理が重くなるため）。抗体は自機の弾では消えない（LYSOZYME・FREEZEの盾で消せる）
 function abCount(){ let c=0; for(const e of enemies) if(e.type==='ab'&&!e.dead)c++; return c; }
 function curSpeedLv(){ return mark7>0?Math.min(speedLv,1):speedLv; }   // 標識されている間は、スピードがA1相当まで落ちる               // mark7：標識の残り時間（フレーム）。5秒、重ねて付くと最大10秒
 function markPlayer(){ const was=mark7>0; mark7=Math.min(600,mark7+300); sfx.mark(); addFloater(player.x,player.y-34,'標識された！','#ffd23e');
@@ -2173,7 +2192,9 @@ function drawMark7(){ const x=player.x+6*PS, y=player.y, k=mark7/600; ctx.save()
   ctx.fillStyle='#ffd23e'; ctx.font='14px DotGothic16'; ctx.textAlign='center'; ctx.fillText(speedLv>1?'標識・減速':'標識',x,y-46); ctx.restore(); }
 function drawY(x,y,a,s,col){ ctx.save(); ctx.translate(x,y); ctx.rotate(a); ctx.strokeStyle=col; ctx.lineWidth=3*s; ctx.lineCap='round';
   ctx.beginPath(); ctx.moveTo(0,10*s); ctx.lineTo(0,0); ctx.lineTo(-7*s,-8*s); ctx.moveTo(0,0); ctx.lineTo(7*s,-8*s); ctx.stroke(); ctx.restore(); }
-function drawAb(e){ drawY(e.x,e.y,e.rot,1,e.flash>0?'#ffffff':'rgba(255,210,62,.95)'); }
+let _abSpr=null;   // 軽量化：抗体（Y字）は最初に1回だけ画像にして、あとは回転して貼るだけ
+function drawAb(e){ if(!_abSpr){ const c=document.createElement('canvas'); c.width=c.height=32; const m=ctx; ctx=c.getContext('2d'); try{ drawY(16,16,0,1,'rgba(255,210,62,.95)'); } finally { ctx=m; } _abSpr=c; }
+  ctx.save(); ctx.translate(e.x,e.y); ctx.rotate(e.rot); ctx.drawImage(_abSpr,-16,-16); ctx.restore(); }
 function drawBcell(e){ ctx.save(); ctx.translate(e.x,e.y); const f=e.flash>0;
   if(e.glow){ ctx.fillStyle=`rgba(255,210,62,${e.glow/40})`; ctx.beginPath(); ctx.arc(0,0,e.r+8,0,7); ctx.fill(); }
   ctx.fillStyle=f?'#ffffff':'#a88ad8'; ctx.beginPath(); ctx.arc(0,0,e.r,0,7); ctx.fill(); ctx.strokeStyle='#e6d6ff'; ctx.lineWidth=2; ctx.stroke();
@@ -2218,7 +2239,7 @@ function buildEvents7(){ initLymph(); const ev=[];
   return ev.sort((a,b)=>a.x-b.x); }
 
 // ================= ステージ7 ボス：巨大形質細胞（抗体）＋暴走ヘルパーT細胞（攻撃）。好中球が標識に反応して襲う =================
-function spawnBoss7(){ setTimeout(()=>{ if(boss&&!demo)startSuperBossBGM(); },1500);
+function spawnBoss7(){ later(()=>{ if(boss&&!demo)startSuperBossBGM(); },1500);
   const pc={kind:'pc',x:W+180,y:150,tx:690,ty:150,r:70,hp:400,max:400,flash:0,cd:120,ph:0},
         ht={kind:'ht',x:W+200,y:390,tx:720,ty:390,r:52,hp:400,max:400,flash:0,cd:150,ph:1,mode:0};
   boss={custom:1,parts:[pc,ht],x:W+190,y:H/2,r:60,ph:0,flash:0,dead:0,minT:200,solo:0};
@@ -2242,7 +2263,7 @@ function updateBoss7(){ const b=boss, [pc,ht]=b.parts;
   if(ht.hp>0&&ready&&--ht.cd<=0){ const aimOn=mark7>0||soloHt, m=ht.mode%3, sx=ht.x-ht.r*.7, sy=ht.y;
     if(m===0){ const n=dN(soloHt?16:12); for(let i=0;i<n;i++){ const a=i/n*Math.PI*2+b.ph*3; eBullets.push({x:ht.x,y:ht.y,vx:Math.cos(a)*2.2,vy:Math.sin(a)*2.2,r:6}); } }
     else if(m===1){ if(aimOn) fan([-.3,-.15,0,.15,.3]).forEach(sp=>aim(sx,sy,3.3,sp)); else fan([-.35,-.17,0,.17,.35]).forEach(sp=>eBullets.push({x:sx,y:sy,vx:-3*Math.cos(sp),vy:3*Math.sin(sp),r:6})); }
-    else { for(let k=0;k<(aimOn?4:3);k++) setTimeout(()=>{ if(boss&&ht.hp>0){ if(aimOn)aim(sx,ht.y,3.6); else eBullets.push({x:sx,y:ht.y,vx:-3.4,vy:(Math.random()-.5)*1.4,r:6}); } },k*120); }
+    else { for(let k=0;k<(aimOn?4:3);k++) later(()=>{ if(boss&&ht.hp>0){ if(aimOn)aim(sx,ht.y,3.6); else eBullets.push({x:sx,y:ht.y,vx:-3.4,vy:(Math.random()-.5)*1.4,r:6}); } },k*120); }
     ht.mode++; ht.cd=soloHt?(hardUp()?42:55):(hardUp()?58:cfg.diff==='EASY'?100:78); }
   // 好中球：一定間隔で出現。形質細胞だけが残ると間隔が短くなる
   if(ready&&--b.minT<=0){ const n=soloPc?2:1; for(let k=0;k<n;k++){ const lucky=(b.neuN=(b.neuN||0)+1)%3===0;   // 他のボス戦と同じく、3匹に1匹がアイテムを持つ（色違いで表示）
@@ -2266,7 +2287,7 @@ function updateBoss7(){ const b=boss, [pc,ht]=b.parts;
 function infStorm7(b,alive){ if(b.stT==null)b.stT=420; b.stT--; if(b.stWarn>0)b.stWarn--;
   if(b.stT===60){ addFloater(b.x,b.y-110,'サイトカインストーム！','#ff3030'); sfx.warn(); b.stWarn=60; }
   if(b.stT<=0){ b.stT=alive.length>1?480:600; shake=10;
-    [0,24].forEach(w=>setTimeout(()=>{ if(boss!==b||b.dead)return; b.parts.filter(p=>p.hp>0).forEach(p=>{ const n=dN(12); for(let i=0;i<n;i++){ const a=i/n*Math.PI*2+w*.02+p.ph; eBullets.push({x:p.x,y:p.y,vx:Math.cos(a)*2.4,vy:Math.sin(a)*2.4,r:6}); } }); },w*16.7)); } }
+    [0,24].forEach(w=>later(()=>{ if(boss!==b||b.dead)return; b.parts.filter(p=>p.hp>0).forEach(p=>{ const n=dN(12); for(let i=0;i<n;i++){ const a=i/n*Math.PI*2+w*.02+p.ph; eBullets.push({x:p.x,y:p.y,vx:Math.cos(a)*2.4,vy:Math.sin(a)*2.4,r:6}); } }); },w*16.7)); } }
 function drawStorm7(b){ if(!(b.stWarn>0))return; b.parts.forEach(p=>{ if(p.hp<=0)return; const r=(p.r||60)+20+(60-b.stWarn)*.8;
   ctx.strokeStyle=`rgba(255,30,30,${.3+.5*(Math.floor(t/4)%2)})`; ctx.lineWidth=3; ctx.beginPath(); ctx.arc(p.x,p.y,r,0,7); ctx.stroke(); }); }
 function drawBoss7(){ const b=boss, [pc,ht]=b.parts; if(isInf())drawStorm7(b);
@@ -2286,15 +2307,14 @@ function drawPlasma7(p){ const f=p.flash>0, br=Math.sin(p.ph*.8), rx=p.r*1.45*(1
   for(let k=0;k<6;k++){ const ex=-18, ey=8, a1=rx*.78-k*10, b1=ry*.74-k*7; if(a1<14)break;          // 粗面小胞体：波打つ膜と、その上のリボソームの粒
     ctx.strokeStyle=(bcA(7,220,200,255)+(.55-k*.06)+')'); ctx.lineWidth=3; ctx.beginPath();
     for(let i=0;i<=36;i++){ const a=.55+i/36*3.7, w=1+.05*Math.sin(a*6+p.ph*2+k); const x=ex+Math.cos(a)*a1*w, y=ey+Math.sin(a)*b1*w; i?ctx.lineTo(x,y):ctx.moveTo(x,y); } ctx.stroke();
-    ctx.fillStyle=bc(7,'rgba(255,230,160,.8)'); for(let i=0;i<10;i++){ const a=.7+i/10*3.4+p.ph*.05, w=1+.05*Math.sin(a*6+p.ph*2+k); ctx.beginPath(); ctx.arc(ex+Math.cos(a)*(a1+3)*w,ey+Math.sin(a)*(b1+3)*w,1.4,0,7); ctx.fill(); } }
+    ctx.fillStyle=bc(7,'rgba(255,230,160,.8)'); ctx.beginPath(); for(let i=0;i<10;i++){ const a=.7+i/10*3.4+p.ph*.05, w=1+.05*Math.sin(a*6+p.ph*2+k), rx2=ex+Math.cos(a)*(a1+3)*w, ry2=ey+Math.sin(a)*(b1+3)*w; ctx.moveTo(rx2+1.4,ry2); ctx.arc(rx2,ry2,1.4,0,7); } ctx.fill(); }   // 粒はまとめて1回で塗る
   for(let i=0;i<7;i++){ const k=((p.ph*.25+i/7)%1), a=Math.PI*.75+i*.12, d=k*.95;                     // 小胞（抗体の入った袋）が表面へ運ばれる
     ctx.fillStyle=(bcA(7,255,220,120)+(.35+.5*k)+')'); ctx.beginPath(); ctx.arc(Math.cos(a)*rx*d,Math.sin(a)*ry*d,3+2*k,0,7); ctx.fill(); }
   ctx.restore();
   const nx=rx*.5, ny=-ry*.2, nr=p.r*.46;                                                               // 核：車輪のような模様（クロマチン）がゆっくり回る
   const ng=ctx.createRadialGradient(nx-nr*.4,ny-nr*.4,2,nx,ny,nr); ng.addColorStop(0,bc(7,'#6a4aa8')); ng.addColorStop(1,bc(7,'#1a0c38'));
   ctx.fillStyle=ng; ctx.beginPath(); ctx.arc(nx,ny,nr,0,7); ctx.fill(); ctx.strokeStyle=bc(7,'rgba(200,180,255,.6)'); ctx.lineWidth=2; ctx.stroke();
-  for(let k=0;k<8;k++){ const a=k/8*Math.PI*2+p.ph*.15, cg=ctx.createRadialGradient(nx+Math.cos(a)*nr*.6-1,ny+Math.sin(a)*nr*.6-1,0,nx+Math.cos(a)*nr*.6,ny+Math.sin(a)*nr*.6,6);
-    cg.addColorStop(0,bc(7,'#e0d0ff')); cg.addColorStop(1,bc(7,'#7a5ac0')); ctx.fillStyle=cg; ctx.beginPath(); ctx.arc(nx+Math.cos(a)*nr*.6,ny+Math.sin(a)*nr*.6,5.5,0,7); ctx.fill(); }
+  { const sp=ballSpr(5.5,bc(7,'#e0d0ff'),bc(7,'#7a5ac0')); for(let k=0;k<8;k++){ const a=k/8*Math.PI*2+p.ph*.15; ctx.drawImage(sp,nx+Math.cos(a)*nr*.6-7,ny+Math.sin(a)*nr*.6-7); } }   // 軽量化：クロマチンの粒は画像を使い回す
   ctx.fillStyle=bc(7,'#c8b0ff'); ctx.beginPath(); ctx.arc(nx,ny,5,0,7); ctx.fill();
   ctx.fillStyle=bc(7,'rgba(255,255,255,.22)'); ctx.beginPath(); ctx.ellipse(-rx*.35,-ry*.55,rx*.35,ry*.16,-.15,0,7); ctx.fill();   // つや（上からの光）
   for(let k=0;k<5;k++){ const a=Math.PI*.7+k*.25, s=.7+.15*Math.sin(p.ph*2+k); drawY(Math.cos(a)*rx*.92,Math.sin(a)*ry*.92,a+Math.PI/2,s,bc(7,'rgba(255,210,62,.9)')); }   // 表面で出番を待つ抗体
@@ -2360,13 +2380,14 @@ const AREAS={
   5:SECTIONS.map(a=>[a[0],a[1],'#ff8a9a']),
   6:SECTIONS6, 7:SECTIONS7 };
 let areaI=0, areaBan=null;
+const AREA_Y=H-150;   // エリア名の表示位置（上端）。画面下のフォーメーション・LYSOZYMEボタンと重ならない高さ（スマホで特に大きく見えるため余裕をとる）
 function updateArea(){ const A=AREAS[stage]; if(!A)return; const pw=(scroll+player.x)/SK;
   while(areaI+1<A.length&&pw>=A[areaI+1][0]){ areaI++; areaBan={i:areaI,f:0}; }
   if(areaBan&&++areaBan.f>200)areaBan=null; }
 function drawAreaBan(){ if(!areaBan)return; const S=AREAS[stage][areaBan.i], k=areaBan.f, a=clamp(Math.min(k/20,(200-k)/30),0,1);
   ctx.save(); ctx.globalAlpha=a; ctx.textAlign='center'; ctx.textBaseline='middle';
-  ctx.fillStyle='rgba(6,2,18,.55)'; ctx.fillRect(W/2-190,H-78,380,46); ctx.strokeStyle=S[2]; ctx.lineWidth=1; ctx.strokeRect(W/2-190+.5,H-78+.5,379,45);
-  ctx.fillStyle=S[2]; ctx.font='13px DotGothic16'; ctx.fillText('AREA 0'+(areaBan.i+1),W/2,H-66); ctx.font='20px DotGothic16'; ctx.fillStyle='#fff'; ctx.fillText(S[1],W/2,H-45); ctx.restore(); }
+  ctx.fillStyle='rgba(6,2,18,.55)'; ctx.fillRect(W/2-190,AREA_Y,380,46); ctx.strokeStyle=S[2]; ctx.lineWidth=1; ctx.strokeRect(W/2-190+.5,AREA_Y+.5,379,45);
+  ctx.fillStyle=S[2]; ctx.font='13px DotGothic16'; ctx.fillText('AREA 0'+(areaBan.i+1),W/2,AREA_Y+12); ctx.font='20px DotGothic16'; ctx.fillStyle='#fff'; ctx.fillText(S[1],W/2,AREA_Y+33); ctx.restore(); }
 const NODES8=[8050,8550,9050,9550,10000];    // ランビエ絞輪（くびれ）
 const GATES8=[1150,1650,2150,2650];          // 血液脳関門の閉じた関門
 const AX8=[3350,3780,4200,4620,5060,5480,5900,6300];   // 活動電位が走る軸索（大脳皮質）
@@ -2495,8 +2516,8 @@ function drawSoma8(){ const a0=scroll/SK-200, a1=(scroll+W)/SK+200; if(a1<3000||
     ctx.fillStyle=`rgba(255,240,255,${.6+.4*pl})`; ctx.beginPath(); ctx.arc(x+3,y-2,4,0,7); ctx.fill(); } }
 function drawNeuroFg(){ drawSoma8(); drawMyelin8(); drawSynapse8(); drawVac8(); drawGates8(); drawAxons8();
   if(secBan8){ const k=secBan8.f, a=clamp(Math.min(k/20,(200-k)/30),0,1); ctx.save(); ctx.globalAlpha=a; ctx.textAlign='center'; ctx.textBaseline='middle';
-    const S=SECTIONS8[secBan8.i]; ctx.fillStyle='rgba(6,2,18,.55)'; ctx.fillRect(W/2-190,H-78,380,46); ctx.strokeStyle=S[2]; ctx.lineWidth=1; ctx.strokeRect(W/2-190+.5,H-78+.5,379,45);
-    ctx.fillStyle=S[2]; ctx.font='13px DotGothic16'; ctx.fillText('AREA 0'+(secBan8.i+1),W/2,H-66); ctx.font='20px DotGothic16'; ctx.fillStyle='#fff'; ctx.fillText(S[1],W/2,H-45); ctx.restore(); } }
+    const S=SECTIONS8[secBan8.i]; ctx.fillStyle='rgba(6,2,18,.55)'; ctx.fillRect(W/2-190,AREA_Y,380,46); ctx.strokeStyle=S[2]; ctx.lineWidth=1; ctx.strokeRect(W/2-190+.5,AREA_Y+.5,379,45);
+    ctx.fillStyle=S[2]; ctx.font='13px DotGothic16'; ctx.fillText('AREA 0'+(secBan8.i+1),W/2,AREA_Y+12); ctx.font='20px DotGothic16'; ctx.fillStyle='#fff'; ctx.fillText(S[1],W/2,AREA_Y+33); ctx.restore(); } }
 // ---- 毎フレームの処理 ----
 function updateNeuro(){ const pw=(scroll+player.x)/SK;
   while(sec8+1<SECTIONS8.length&&pw>=SECTIONS8[sec8+1][0]){ sec8++; secBan8={i:sec8,f:0}; }
@@ -2537,7 +2558,7 @@ function spawn8(ev){ const T=ev.type, dr=p=>Math.random()<p;
 function upd8(e){ const T=e.type;
   if(T==='mprot'){ e.ph+=.08; e.x-=2.5; e.y=e.y0+Math.sin(e.ph)*16; }
   else if(T==='nt8'){ e.x+=e.vx; e.y+=e.vy; if(hitsTerrain(e.x,e.y,4))e.vy=-e.vy; }
-  else if(T==='peri8'){ e.x=e.wx-scroll; e.y=e.ceil?ceilH(e.wx)+16:H-floorH(e.wx)-16; if(--e.cd<=0&&e.x<W-30&&e.x>60){ shoot(e.x,e.y,2.9); if(cfg.diff!=='EASY')setTimeout(()=>{ if(!e.dead&&state==='play')shoot(e.x,e.y,2.9); },180); e.cd=110*F8; } }
+  else if(T==='peri8'){ e.x=e.wx-scroll; e.y=e.ceil?ceilH(e.wx)+16:H-floorH(e.wx)-16; if(--e.cd<=0&&e.x<W-30&&e.x>60){ shoot(e.x,e.y,2.9); if(cfg.diff!=='EASY')later(()=>{ if(!e.dead&&state==='play')shoot(e.x,e.y,2.9); },180); e.cd=110*F8; } }
   else if(T==='dend8'){ e.bx=e.wx-scroll; e.by=e.ceil?ceilH(e.wx)+6:H-floorH(e.wx)-6; e.ph+=.05;   // 樹状突起：自機の方へ触手を伸ばす
     const dx=player.x-e.bx, dy=player.y-e.by, d=Math.hypot(dx,dy);
     if(e.st===0){ if(--e.cd<=0&&d<380&&!player.dead&&e.bx<W-30){ e.st=1; e.dir=Math.atan2(dy,dx); } }
@@ -2593,7 +2614,7 @@ const DRAW8={
     ctx.fillStyle='#fff4e0'; for(let i=-2;i<=2;i++){ ctx.beginPath(); ctx.moveTo(i*5-2,4); ctx.lineTo(i*5,9+m*4); ctx.lineTo(i*5+2,4); ctx.fill(); }
     ctx.fillStyle='rgba(240,248,255,.8)'; for(let i=0;i<5;i++){ ctx.beginPath(); ctx.arc(-18+i*9,-20+Math.sin(t*.1+i)*2,2,0,7); ctx.fill(); }   // はがした髄鞘のかけら
     ctx.fillStyle=e.cd<24?'#fff':'#ffd23e'; ctx.beginPath(); ctx.arc(-6,-8,3,0,7); ctx.arc(6,-8,3,0,7); ctx.fill(); ctx.restore(); },
-  pulse8:e=>{ ctx.save(); if(e.warn>0){ const a=.4+.6*(Math.floor(t/5)%2); ctx.globalAlpha=a; ctx.fillStyle='#e0d0ff'; ctx.font='26px DotGothic16'; ctx.textAlign='left'; ctx.textBaseline='middle'; ctx.fillText('▶▶',8,e.y); ctx.strokeStyle='rgba(224,208,255,.5)'; ctx.setLineDash([8,8]); ctx.beginPath(); ctx.moveTo(50,e.y); ctx.lineTo(W*.4,e.y); ctx.stroke(); ctx.restore(); return; }
+  pulse8:e=>{ ctx.save(); if(e.warn>0){ const a=.4+.6*(Math.floor(t/5)%2); ctx.globalAlpha=a; ctx.fillStyle='#e0d0ff'; ctx.font='26px DotGothic16'; ctx.textAlign='left'; ctx.textBaseline='middle'; cvTri(18,e.y,20,'#e0d0ff'); cvTri(36,e.y,20,'#e0d0ff'); ctx.strokeStyle='rgba(224,208,255,.5)'; ctx.setLineDash([8,8]); ctx.beginPath(); ctx.moveTo(50,e.y); ctx.lineTo(W*.4,e.y); ctx.stroke(); ctx.restore(); return; }
     ctx.translate(e.x,e.y); for(let k=5;k>=1;k--){ ctx.globalAlpha=.18*(6-k); ctx.drawImage(glowSpr('#b58cff'),-k*14-20,-14,40,28); } ctx.globalAlpha=1; glow('#ffffff',30,20,.6);
     ctx.fillStyle=e.flash>0?'#ffd23e':'#fff'; ctx.beginPath(); ctx.moveTo(16,0); ctx.lineTo(-6,-9); ctx.lineTo(-2,0); ctx.lineTo(-6,9); ctx.closePath(); ctx.fill();
     ctx.strokeStyle='#e6d0ff'; ctx.lineWidth=1.5; ctx.beginPath(); let yy=0; ctx.moveTo(-8,0); for(let x=-12;x>-60;x-=6){ yy=(Math.random()-.5)*10; ctx.lineTo(x,yy); } ctx.stroke(); ctx.restore(); },
@@ -2614,7 +2635,7 @@ const DRAW8={
 };
 
 // ================= 中ボス：暴走アストロサイト（星形のグリア細胞。腕を上下から伸ばして通路をふさぐ） =================
-function spawnMid8(){ mid8=1; state='boss'; speed=0; minionT=200; sfx.rumble(); sfx.warn(); setTimeout(()=>{ if(boss&&boss.mid&&!demo)startSuperBossBGM(); },1500);
+function spawnMid8(){ mid8=1; state='boss'; speed=0; minionT=200; sfx.rumble(); sfx.warn(); later(()=>{ if(boss&&boss.mid&&!demo)startSuperBossBGM(); },1500);
   boss={custom:1,mid:1,name:'暴走アストロサイト',x:W+170,y:H/2,r:62,hp:330,max:330,shown:330,ph:0,cd:140,mode:0,flash:0,dead:0,armorAt:.5,walls:[],wcd:260,minT:260};
   msg={text:'!! WARNING !!',sub:'暴走アストロサイト接近',life:180};
   talkQ=[]; if(talkCur&&talkCur.n>=talkCur.s.length)talkCur.hold=Math.min(talkCur.hold,20);
@@ -2656,7 +2677,7 @@ function updateMid8(){ const b=boss; b.ph+=.02;
   if(ready&&--b.cd<=0){ const m=b.mode%3;                                                        // 核からの扇状弾・リング
     if(m===0){ fan([-.36,-.18,0,.18,.36]).forEach(s=>aim(b.x-40,b.y,3.2,s)); b.cd=70*F8; }
     else if(m===1){ const n=dN(18); for(let i=0;i<n;i++){ const a=i/n*Math.PI*2+b.ph*2; eBullets.push({x:b.x,y:b.y,vx:Math.cos(a)*2.3,vy:Math.sin(a)*2.3,r:6}); } b.cd=95*F8; }
-    else { for(let k=0;k<(b.armor?5:4);k++) setTimeout(()=>{ if(boss&&boss.mid&&!boss.dead){ fan([-.5,-.25,0,.25,.5]).forEach(s=>{ const a=Math.PI+s+Math.sin(t*.1)*.2; eBullets.push({x:boss.x-40,y:boss.y,vx:Math.cos(a)*3,vy:Math.sin(a)*3,r:5}); }); } },k*140); b.cd=120*F8; }
+    else { for(let k=0;k<(b.armor?5:4);k++) later(()=>{ if(boss&&boss.mid&&!boss.dead){ fan([-.5,-.25,0,.25,.5]).forEach(s=>{ const a=Math.PI+s+Math.sin(t*.1)*.2; eBullets.push({x:boss.x-40,y:boss.y,vx:Math.cos(a)*3,vy:Math.sin(a)*3,r:5}); }); } },k*140); b.cd=120*F8; }
     b.mode++; }
   if(ready&&--b.wcd<=0&&b.walls.length<(b.armor?2:1)){ b.walls.push(midWall()); sfx.armWarn8(); b.wcd=(b.armor?150:230)*F8; }      // 腕を伸ばして通路をふさぐ
   updArms8(b);
@@ -2706,7 +2727,7 @@ function drawMid8(){ const b=boss; if(b.dead&&b.dead%8<3)return drawBossMeter(b)
 const ST8_A=[[2.0,2.45,2.9,3.35,3.8,4.25],[1.6,2.05,2.5,2.95,3.35,3.8,4.25,4.7]];   // 構造体の向き（第1形態6本／第2形態8本）
 let boss8Ph=1;
 function newStructs8(ph){ return ST8_A[ph-1].map((a,i)=>({a,len:0,full:ph===1?92:80,hp:ph===1?14:11,max:ph===1?14:11,flash:0,cd:60+i*25,x:0,y:0,r:22,dead:0,seed:i*7+ph})); }
-function spawnBoss8(){ boss8Ph=1; vac8Grow=0; setTimeout(()=>{ if(boss&&boss.fin&&!demo)startBoss8BGM(); },1500);
+function spawnBoss8(){ boss8Ph=1; vac8Grow=0; later(()=>{ if(boss&&boss.fin&&!demo)startBoss8BGM(); },1500);
   boss={custom:1,fin:1,noArmor:1,x:W+220,y:H/2,r:34,hp:1000,max:1000,shown:1000,walls:[],wcd:420,ph:0,cd:150,mode:0,flash:0,dead:0,phase:1,structs:newStructs8(1),open:0,regrow:0,normT:60,minT:300,parts:[],spiral:0,grd:0};
   msg={text:'!! WARNING !!',sub:'異常型プリオン',life:200};
   say('異常型も、もとは体内にあるタンパク質と同じ成分です。だから免疫系は、これを敵と認識できなかったのです'); say('周囲の構造体を破壊して、本体を露出させてください'); sfx.warn(); }
@@ -2730,7 +2751,7 @@ function updateBoss8(){ const b=boss; b.ph+=.015;
   if(ready) alive.forEach(s=>{ if(s.len<s.full*.7)return; if(--s.cd<=0){ const [x,y]=tip8(b,s); shoot(x,y,b.phase===2?3.1:2.8); s.cd=(b.phase===2?92:125)*F8+Math.random()*30; } });
   if(ready&&--b.cd<=0){ const m=b.mode%(b.phase===2?4:3);
     if(m===0){ const n=dN(b.phase===2?26:20); for(let i=0;i<n;i++){ const a=i/n*Math.PI*2+b.ph*3; eBullets.push({x:b.x,y:b.y,vx:Math.cos(a)*2.2,vy:Math.sin(a)*2.2,r:6}); } sfx.pulse8(); b.cd=90*F8; }
-    else if(m===1){ for(let k=0;k<4;k++) setTimeout(()=>{ if(boss&&boss.fin&&!boss.dead) fan(b.phase===2?[-.33,-.11,.11,.33]:[-.22,0,.22]).forEach(sp=>aim(boss.x-30,boss.y,3.6,sp)); },k*150); b.cd=110*F8; }
+    else if(m===1){ for(let k=0;k<4;k++) later(()=>{ if(boss&&boss.fin&&!boss.dead) fan(b.phase===2?[-.33,-.11,.11,.33]:[-.22,0,.22]).forEach(sp=>aim(boss.x-30,boss.y,3.6,sp)); },k*150); b.cd=110*F8; }
     else if(m===2){ const n=dN(9); for(let i=0;i<n;i++){ const a=Math.PI+(i-(n-1)/2)*.2; eBullets.push({x:b.x-30,y:b.y,vx:Math.cos(a)*1.6,vy:Math.sin(a)*1.6,r:7,home:50}); } b.cd=120*F8; }
     else { b.spiral=80; b.cd=140*F8; }
     b.mode++; }
@@ -3047,7 +3068,7 @@ function updateBossMinions(){ if(state!=='boss'||!boss||boss.dead||demo||boss.x>
     // ステージ7は好中球を独自に出す
   const iv=450; if(++minionT>=iv){ minionT=0; spawnBossMinions(); } }
 function spawnBoss(){ minionT=200; talkBoss(); sfx.rumble(); if(stage===8)return spawnBoss8(); if(stage===7)return spawnBoss7(); if(stage===6)return spawnBoss6(); if(stage===5)return spawnBoss5(); if(stage===4)return spawnBoss4(); if(stage===3)return spawnBoss3(); if(stage===2)return spawnBoss2(); spawnBoss1(); }
-function spawnBoss1(){ setTimeout(()=>{ if(boss&&!demo)startSuperBossBGM(); },1500); boss={x:W+160,y:H/2,r:92,hp:310,max:310,shown:310,ph:0,cd:120,mode:0,flash:0,dead:0}; msg={text:'!! WARNING !!',sub:'巨大マクロファージ接近',life:180}; sfx.warn(); }
+function spawnBoss1(){ later(()=>{ if(boss&&!demo)startSuperBossBGM(); },1500); boss={x:W+160,y:H/2,r:92,hp:310,max:310,shown:310,ph:0,cd:120,mode:0,flash:0,dead:0}; msg={text:'!! WARNING !!',sub:'巨大マクロファージ接近',life:180}; sfx.warn(); }
 function updateBoss(){ if(stage===8)return boss.mid?updateMid8():updateBoss8(); if(stage===7)return updateBoss7(); if(stage===6)return updateBoss6(); if(stage===5)return updateBoss5(); if(stage===4)return updateBoss4(); if(stage===3)return updateBoss3(); if(stage===2)return updateBoss2(); updateBoss1(); }
 function updateBoss1(){
   const b=boss; b.ph+=.02;
@@ -3059,7 +3080,7 @@ function updateBoss1(){
   if(b.x<760&&--b.cd<=0){
     if(b.mode%3===0){ const n=dN(16); for(let i=0;i<n;i++){const a=i/n*Math.PI*2+b.ph; eBullets.push({x:b.x,y:b.y,vx:Math.cos(a)*2.6,vy:Math.sin(a)*2.6,r:6});} b.cd=100; }
     else if(b.mode%3===1){ fan([-.25,0,.25]).forEach(s=>aim(b.x-60,b.y,4,s)); b.cd=50; }
-    else { for(let i=0;i<dN(5);i++) setTimeout(()=>{ if(boss&&!boss.dead) aim(boss.x-60,boss.y,5); },i*120); b.cd=110; }
+    else { for(let i=0;i<dN(5);i++) later(()=>{ if(boss&&!boss.dead) aim(boss.x-60,boss.y,5); },i*120); b.cd=110; }
     b.mode++;
   }
 }
@@ -3095,7 +3116,7 @@ function drawBoss1(){
 }
 
 // ---------------- ボス2：巨大アスペルギルス（カビ） ----------------
-function spawnBoss2(){ setTimeout(()=>{ if(boss&&!demo)startSuperBossBGM(); },1500); boss={x:W+160,y:H/2,r:78,hp:380,max:380,shown:380,ph:0,cd:120,mode:0,flash:0,dead:0}; msg={text:'!! WARNING !!',sub:'巨大アスペルギルス接近',life:180}; sfx.warn(); }
+function spawnBoss2(){ later(()=>{ if(boss&&!demo)startSuperBossBGM(); },1500); boss={x:W+160,y:H/2,r:78,hp:380,max:380,shown:380,ph:0,cd:120,mode:0,flash:0,dead:0}; msg={text:'!! WARNING !!',sub:'巨大アスペルギルス接近',life:180}; sfx.warn(); }
 function updateBoss2(){
   const b=boss; b.ph+=.018;
   if(b.dead){ b.dead++; if(b.dead%6===0){explode(b.x+(Math.random()-.5)*160,b.y+(Math.random()-.5)*160,20,'#9fffc4'); sfx.boom();}
@@ -3107,7 +3128,7 @@ function updateBoss2(){
   if(b.x<760&&--b.cd<=0){
     const m=b.mode%3;
     if(m===0){ const n=dN(angry?24:18); for(let i=0;i<n;i++){ const a=i/n*Math.PI*2+b.ph, s=1.6+Math.random()*.9; eBullets.push({x:b.x,y:b.y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,r:5,spore:1}); } b.cd=90; }
-    else if(m===1){ fan([-.35,0,.35]).forEach(sp=>{ for(let i=0;i<dN(6);i++) setTimeout(()=>{ if(boss&&!boss.dead) aim(boss.x-50,boss.y,4.2,sp); },i*90); }); b.cd=angry?70:95; }
+    else if(m===1){ fan([-.35,0,.35]).forEach(sp=>{ for(let i=0;i<dN(6);i++) later(()=>{ if(boss&&!boss.dead) aim(boss.x-50,boss.y,4.2,sp); },i*90); }); b.cd=angry?70:95; }
     else { const n=dN(angry?12:8); for(let i=0;i<n;i++){ const a=Math.PI*.5+i/Math.max(n-1,1)*Math.PI; eBullets.push({x:b.x,y:b.y,vx:Math.cos(a)*3,vy:Math.sin(a)*3,r:6,spore:1,home:50+i*4}); } b.cd=120; }
     b.mode++;
   }
@@ -3149,7 +3170,7 @@ function drawBoss2(){
 // ---------------- ボス3：巨大サナダムシ ----------------
 // 片節（体の節）を全部壊すと、頭節（弱点）が攻撃できるようになる
 const SEG_N=20, SEG_GAP=6;
-function spawnBoss3(){ setTimeout(()=>{ if(boss&&!demo)startSuperBossBGM(); },1500);
+function spawnBoss3(){ later(()=>{ if(boss&&!demo)startSuperBossBGM(); },1500);
   const segs=[]; for(let i=0;i<SEG_N;i++) segs.push({i,hp:10,x:W+120,y:H/2,r:12+i*.25,flash:0,alive:1,ang:0});
   boss={custom:1,x:W+120,y:H/2,r:26,hp:0,max:0,shown:0,ph:0,cd:150,mode:0,flash:0,dead:0,trail:[],segs,head:{hp:160,r:26},charge:0};
   boss.max=boss.shown=boss.hp=160+SEG_N*10;
@@ -3167,8 +3188,8 @@ function updateBoss3(){
     s.x=p.x+10; s.y=p.y; s.ang=Math.atan2(q.y-p.y,q.x-p.x); if(s.flash>0)s.flash--; });
   if(b.flash>0)b.flash--;
   if(b.x<W-60&&--b.cd<=0){ const m=b.mode%3;
-    if(m===0){ const step=cfg.diff==='EASY'?4:hardUp()?2:3; alive.forEach((s,i)=>{ if(i%step===0) setTimeout(()=>{ if(boss&&!boss.dead&&s.alive) aim(s.x,s.y,2.2); },i*40); }); b.cd=angry?90:120; }
-    else if(m===1){ fan([-.3,0,.3]).forEach(sp=>aim(b.x-20,b.y,4,sp)); if(angry) setTimeout(()=>{ if(boss&&!boss.dead) fan([-.3,0,.3]).forEach(sp=>aim(boss.x-20,boss.y,4,sp)); },300); b.cd=80; }
+    if(m===0){ const step=cfg.diff==='EASY'?4:hardUp()?2:3; alive.forEach((s,i)=>{ if(i%step===0) later(()=>{ if(boss&&!boss.dead&&s.alive) aim(s.x,s.y,2.2); },i*40); }); b.cd=angry?90:120; }
+    else if(m===1){ fan([-.3,0,.3]).forEach(sp=>aim(b.x-20,b.y,4,sp)); if(angry) later(()=>{ if(boss&&!boss.dead) fan([-.3,0,.3]).forEach(sp=>aim(boss.x-20,boss.y,4,sp)); },300); b.cd=80; }
     else { b.charge=100; b.cd=130; }
     b.mode++; }
   // 当たり判定（自前で処理）
@@ -3215,7 +3236,7 @@ function drawBoss3(){
 
 // ---------------- ボス5：巨大血栓 ----------------
 // 血小板を呼び寄せ、吸収すると体力が回復して大きくなる。体力が減ると網がほどけて赤血球をばらまく
-function spawnBoss5(){ setTimeout(()=>{ if(boss&&!demo)startSuperBossBGM(); },1500);
+function spawnBoss5(){ later(()=>{ if(boss&&!demo)startSuperBossBGM(); },1500);
   boss={x:W+160,y:H/2,r:90,hp:560,max:560,shown:560,ph:0,cd:140,mode:0,flash:0,dead:0,callT:260,angT:0,angry:false};
   msg={text:'!! WARNING !!',sub:'巨大血栓接近',life:180}; sfx.warn(); }
 function updateBoss5(){
@@ -3258,7 +3279,7 @@ function drawBoss5(){
 
 // ---------------- ボス6：巨大腎結石 ----------------
 // 結晶の外殻（12個）を砕くと本体に弾が届く。砕けた破片は壁で1回跳ね返る弾になる。本体の体力が半分を切ると管をふさぐように前進
-function spawnBoss6(){ setTimeout(()=>{ if(boss&&!demo)startSuperBossBGM(); },1500);
+function spawnBoss6(){ later(()=>{ if(boss&&!demo)startSuperBossBGM(); },1500);
   const n=12, ch=20;
   boss={custom:1,x:W+170,y:H/2,r:100,core:58,cp:360,cmax:360,ph:0,rot:0,cd:150,mode:0,flash:0,dead:0,rage:false,
     crys:Array.from({length:n},(_,i)=>({a:i/n*Math.PI*2,hp:ch,max:ch,flash:0,len:30+hash(i+7)*14}))};
@@ -3335,7 +3356,7 @@ function drawBoss6(){ const b=boss; if(isInf())drawSpike6(b); ctx.save(); ctx.tr
 // ---------------- ボス4：巨大マラリア原虫 ----------------
 // 第1形態：肝細胞の殻 → 第2形態：分裂体（メロゾイトを放出）→ 最終形態：核
 const B4=[0,100,80,60], B4R=[0,95,64,38];
-function spawnBoss4(){ setTimeout(()=>{ if(boss&&!demo)startSuperBossBGM(); },1500);
+function spawnBoss4(){ later(()=>{ if(boss&&!demo)startSuperBossBGM(); },1500);
   boss={custom:1,x:W+160,y:H/2,r:95,ph:0,cd:140,mode:0,flash:0,dead:0,form:1,pool:[0,190,180,130],spin:0};
   boss.max=boss.shown=boss.hp=500; msg={text:'!! WARNING !!',sub:'巨大マラリア原虫接近',life:180}; sfx.warn(); }
 function updateBoss4(){
@@ -3518,7 +3539,7 @@ function shopItems(){
   const eq=[{k:'A',n:'SPEED（A）',p:3000,lv:speedLv,mx:4},{k:'O',n:'OPTION（O）',p:5000,lv:optionCount,mx:4},{k:'S',n:'SHIELD（S）',p:2000,lv:shield,mx:5},{k:'B',n:'LYSOZYME',p:14000,lv:bombs,mx:BOMB_MAX}]
     .map((o,i)=>({...o,p:shopPrice(o.p),x:334,y:SHOP_TOP+i*(SHOP_RH+SHOP_GAP),w:290,h:SHOP_RH}));
   const bs=[['pw','POWER UP'],['sh','SHOT SPEED'],['mv','MOVE SPEED']].map(([k,n],i)=>({k,n,base:1,lv:base[k],mx:BASE_MAX[k],p:base[k]<BASE_MAX[k]?shopPrice(SHOP_BASE_PRICE[k][base[k]]*SHOP_BASE_K*(baseTotal()>=8?SHOP_LATE_K:1)):0,x:334,y:SHOP_BASE_Y+i*(SHOP_RH+SHOP_GAP),w:290,h:SHOP_RH}));
-  const go={k:'go',n:'出発する ▶',x:W-190,y:H-54,w:166,h:36};
+  const go={k:'go',n:'出発する',x:W-190,y:H-54,w:166,h:36};
   return [c0,[...eq,...bs,go]];
 }
 function shopFind(k){ for(const col of shopItems()) for(const it of col) if(it.k===k) return it; return null; }
@@ -3596,7 +3617,7 @@ function drawShop(w){ const S=w.shop, cols=shopItems(), cur=cols[S.col][S.row[S.
   // 操作説明と出発ボタン
   ctx.font='13px DotGothic16'; ctx.fillStyle='#8f86b8'; ctx.fillText('PC：クリックで説明／ダブルクリックで購入　スマホ：2回タップで購入　キー：矢印で選択・スペースで購入',24,H-36);
   const go=cols[1][cols[1].length-1], gs=S.sel==='go'||cur===go; ctx.fillStyle=gs?'#3a0f24':'#1a0a20'; ctx.fillRect(go.x,go.y,go.w,go.h); ctx.strokeStyle='#ff3d7f'; ctx.lineWidth=gs?2:1; ctx.strokeRect(go.x+.5,go.y+.5,go.w-1,go.h-1);
-  ctx.font='17px DotGothic16'; ctx.fillStyle='#ff3d7f'; ctx.textAlign='center'; ctx.fillText(go.n,go.x+go.w/2,go.y+go.h/2+1);
+  ctx.font='17px DotGothic16'; ctx.fillStyle='#ff3d7f'; ctx.textAlign='center'; ctx.fillText(go.n,go.x+go.w/2-8,go.y+go.h/2+1); cvTri(go.x+go.w/2-8+ctx.measureText(go.n).width/2+12,go.y+go.h/2,12,'#ff3d7f');
   // 購入確認
   if(S.modal){ const it=shopFind(S.modal.k), M=SHOP_MODAL; ctx.fillStyle='rgba(5,2,13,.7)'; ctx.fillRect(0,0,W,H);
     ctx.fillStyle='#140a2a'; ctx.fillRect(M.x,M.y,M.w,M.h); ctx.strokeStyle='#ffd23e'; ctx.lineWidth=1.5; ctx.strokeRect(M.x,M.y,M.w,M.h);
@@ -3666,6 +3687,7 @@ function drawExplain(f,E){
   ctx.globalAlpha=1;
 }
 function startStage(n,mid){
+  gTimers=[];
   stage=n; mid8=(n===8&&mid)?2:0; SK=STAGE_SK[n]||1.2; STAGE_LEN=Math.round(baseLen()*SK); sec8=0; secBan8=null; areaI=0; areaBan=null; node8=-1; boss8Ph=1; vac8Grow=0; neuroHeal=0; warp=null; scroll=0; speed=1.35; t=0; boss=null; msg=null;
   bombFx=null; bullets=[];eBullets=[];enemies=[];items=[];allyItems=[];pickups=[];floaters=[];bileOn=false;elec=null;elecNext=600;secIdx=0;player.stun=0;mark7=0;markTalk7=false;particles=[]; resetTalk(); events=buildEvents();
   player.x=-60; player.y=H/2; player.vx=player.vy=0; player.inv=150; player.dead=0; player.cd=0; player.enter=1; history=[]; optPts=[];
@@ -3742,7 +3764,7 @@ function demoFormation(){
   if(state==='boss'&&boss&&!boss.dead&&boss.x<W-40){
     if(Math.abs(boss.y-player.y)<70){ if(t>=fzS.cdEnd&&t%2===0){ triggerFreeze(); demoSwitchT=t+180; return; } want='focus'; } }
   else { // 道中：正面の帯にいる敵が2体以上で、上下・後ろの敵より多ければFOCUS（体力の多い敵が正面にいるときもFOCUS）
-    const live=enemies.filter(e=>!e.harmless&&!e.hide&&e.x>-20&&e.x<W+20);
+    const live=enemies.filter(e=>!e.harmless&&!e.hide&&e.type!=='ab'&&e.x>-20&&e.x<W+20);
     const front=live.filter(e=>e.x>player.x&&e.x<player.x+520&&Math.abs(e.y-player.y)<90);
     const other=live.length-front.length, tough=front.some(e=>e.hp>=3);
     if((front.length>=2&&front.length>=other)||tough) want='focus'; }
@@ -3750,7 +3772,7 @@ function demoFormation(){
 }
 function startDemo(){ demoSwitchT=0; demo=true; idleTimer=0; reset(); state='play'; titleBullets=[]; startDemoBGM();
   $('screen').classList.add('hidden'); $('hud').classList.remove('hidden'); $('volBtn').classList.add('hidden'); $('demoTag').classList.remove('hidden'); }
-function stopDemo(){ if(!demo)return; demo=false; boss=null; idleTimer=0;
+function stopDemo(){ if(!demo)return; gTimers=[]; demo=false; boss=null; idleTimer=0;
   $('demoTag').classList.add('hidden'); $('hud').classList.add('hidden'); $('volBtn').classList.remove('hidden');
   $('enter').style.display='none'; document.body.classList.add('started');   // 「はじめる」画面には戻さない
   msg=null; bullets=[];eBullets=[];enemies=[];items=[];particles=[];
@@ -3759,6 +3781,7 @@ function stopDemo(){ if(!demo)return; demo=false; boss=null; idleTimer=0;
   if(currentBgmType!=='title')startTitleBGM(); }
 // ---------------- ゲーム進行 ----------------
 function reset(){
+  gTimers=[];
   stage=1;warp=null;$('stageName').textContent=STAGES[1].name;
   SK=STAGE_SK[1]||1.2; STAGE_LEN=Math.round(BASE_LEN*SK); mid8=0; playT=0;   // 前のプレイの倍率・長さを残さない
   scroll=0;speed=1.35;score=0;credit=0;base.pw=base.sh=base.mv=0;shipSpr=0;lives=cfg.lives===0?Infinity:cfg.lives;t=0;boss=null;msg=null;
@@ -3774,8 +3797,12 @@ function killPlayer(){ if(godMode)return;
   explode(player.x,player.y,40,'#3ef2d0'); sfx.miss(); shake=20;
   player.dead=1; mark7=0; allies=[]; lives--; if(lives===1)say(TALK_LAST[Math.floor(Math.random()*TALK_LAST.length)]); else if(lives>0)say(TALK_MISS[Math.floor(Math.random()*TALK_MISS.length)],true); optionCount=0; weapon='NORMAL'; updateWeaponHud();
 }
+// ---- ゲーム内の時間差処理：実時間ではなくフレームで数える（ポーズ中は止まる・処理落ちしても間隔がずれない） ----
+let gTimers=[], _noLater=0;
+function later(fn,ms){ if(_noLater)return; gTimers.push({f:Math.max(1,Math.round(ms*.06)),fn}); }
+function tickLater(){ if(_noLater||!gTimers.length)return; const L=gTimers; gTimers=[]; for(const g of L){ if(--g.f<=0){ try{ g.fn(); }catch(e){ console.error(e); } } else gTimers.push(g); } }
 function update(){
-  t++;
+  t++; tickLater();
   if(!demo&&(state==='play'||state==='boss'))playT++;
   if(!boss&&state==='play'){ scroll+=speed+(stage===5?2.6*beatK():0)+(stage===8?myelin8((scroll+W/2)/SK):0);
     if(stage===8&&mid8===0&&scroll>=MID8*SK&&scroll<MID8*SK+600) spawnMid8();   // ステージ8の中ボス
@@ -3821,7 +3848,7 @@ function update(){
     if(b.kind==='walk'&&b.crawl){ b.wx+=9; b.x=b.wx-scroll; b.y=b.dir<0?ceilH(b.wx)+6:H-floorH(b.wx)-6; return; }
     if(b.track){ let tx=null,ty=null,best=1e9;
       // ザコ（サナダムシの片節も含む）を優先し、いなければボスを狙う
-      const cand=enemies.filter(e=>!e.hide&&!e.harmless);
+      const cand=enemies.filter(e=>!e.hide&&!e.harmless&&e.type!=='ab');   // 撃てない抗体は追わない
       if(boss&&!boss.dead&&boss.segs) boss.segs.forEach(sg=>{ if(sg.alive)cand.push(sg); });
       if(boss&&!boss.dead&&boss.parts) boss.parts.forEach(p=>{ if(p.hp>0||p===boss)cand.push(p); });   // ステージ7：2体のボスをそれぞれ追尾
       if(boss&&!boss.dead&&!boss.segs&&!(boss.parts&&boss.parts.length)) cand.push(boss);   // 中ボスなど：ザコがいてもボス本体を狙えるように
@@ -3838,6 +3865,7 @@ function update(){
       if(b.reflect&&b.bounces>0){ reflectBullet(b); return; } b.dead=1; if(b.fw)burst(b.x-b.vx,b.y-b.vy); else explode(b.x,b.y,3,'#ff9ec4'); } });
   bullets=bullets.filter(b=>!b.dead&&b.x-(b.len||0)<W+20&&b.x+(b.len||0)>-20&&b.y>-20&&b.y<H+20);
   eBullets.forEach(b=>{ if(b.pop&&--b.pop===0){ b.dead=1; const n=dZ(6); for(let k=0;k<n;k++){ const a=k/n*Math.PI*2+Math.random(); eBullets.push({x:b.x,y:b.y,vx:Math.cos(a)*2.3,vy:Math.sin(a)*2.3,r:4}); } explode(b.x,b.y,6,'#fff0b0'); return; } if(b.g)b.vy+=b.g; if(b.home&&--b.home===0){ const a=Math.atan2(player.y-b.y,player.x-b.x); b.vx=Math.cos(a)*3.4; b.vy=Math.sin(a)*3.4; } else if(b.home){b.vx*=.97;b.vy*=.97;} if(b.emb){ if((b.y<b.r&&b.vy<0)||(b.y>H-b.r&&b.vy>0))b.vy=-b.vy; if(b.x<b.r&&b.vx<0&&b.eb>0){ b.vx=-b.vx; b.eb--; } } b.x+=b.vx;b.y+=b.vy; if(b.shard&&hitsTerrain(b.x,b.y,3)){ if(b.bounce>0){ b.bounce--; b.y-=b.vy; b.vy=-b.vy; } else { b.dead=1; explode(b.x,b.y,4,'#f0e0a0'); return; } } if(b.mucus&&hitsTerrain(b.x,b.y,2)){b.dead=1;explode(b.x,b.y,4,'#dff5b0');return;} if(!player.dead&&Math.hypot(b.x-player.x,b.y-player.y)<b.r+5*PS){b.dead=1;killPlayer();}});
+  fzShield();
   eBullets=eBullets.filter(b=>!b.dead&&b.x>-20&&b.x<W+20&&b.y>-20&&b.y<H+20);
 
   // 敵
@@ -3890,7 +3918,8 @@ function update(){
       if(--e.cd<=0&&e.x<W-30&&e.x>60){ const n=Math.min(2+Math.floor(Math.random()*(hardUp()?3:2)),AB_MAX-abCount()); for(let k=0;k<n;k++){ const a=(e.ceil?Math.PI/2:-Math.PI/2)+(k-(n-1)/2)*.45;
           enemies.push({type:'ab',x:e.x,y:e.y,vx:Math.cos(a)*1.6-.6,vy:Math.sin(a)*1.6,rot:Math.random()*6,life:AB_LIFE,hp:1,r:9,flash:0,drop:false,pts:30}); }
         if(n>0){ sfx.abOut(); e.glow=20; } e.cd=(cfg.diff==='EASY'?150:hardUp()?85:115)+Math.random()*30; } }
-    if(e.type==='ab'){ const a=Math.atan2(player.y-e.y,player.x-e.x); e.vx+=Math.cos(a)*.03; e.vy+=Math.sin(a)*.03; const v=Math.hypot(e.vx,e.vy); if(v>1.4){e.vx*=1.4/v;e.vy*=1.4/v;}   // 抗体：自機の方へゆっくり漂う
+    if(e.type==='ab'){ const dx=player.x-e.x, dy=player.y-e.y, d=Math.hypot(dx,dy)||1, near=d<220&&!player.dead, ac2=near?.09:.03, mx=near?2.1:1.4;   // 抗体：自機の方へゆっくり漂い、近づくと向きを変えて寄ってくる
+      e.vx+=dx/d*ac2; e.vy+=dy/d*ac2; const v=Math.hypot(e.vx,e.vy); if(v>mx){e.vx*=mx/v;e.vy*=mx/v;}
       e.x+=e.vx-.4; e.y+=e.vy; e.rot+=.04; if(--e.life<=0)e.dead=1; }
     if(e.type==='macro7') updateMacro7(e);
     if(stage===8) upd8(e);
@@ -3907,7 +3936,7 @@ function update(){
     if(e.type==='ion'){ e.ph+=.12; e.x-=3.4; e.y=midY(e.x+scroll)+e.off+Math.sin(e.ph)*6; }
     if(e.type==='uti'){ e.x=e.wx-scroll; e.y=e.ceil?ceilH(e.wx)+16:H-floorH(e.wx)-16; if(--e.cd<=0&&e.x<W-30&&e.x>60){ fan([-.3,0,.3]).forEach(s=>aim(e.x,e.y,2.6,s)); e.cd=120; } }
     if(e.type==='turret'){ e.x=e.wx-scroll; if(--e.cd<=0&&e.x<W-20&&e.x>60){shoot(e.x,e.y-10,2.4);e.cd=100;} }
-    bullets.forEach(b=>{ if(!b.dead&&e.hp>0&&!e.hide&&canHit(b,e)&&bulletHits(b,e.x,e.y,e.r)){ e.hp-=b.dmg; e.flash=4; sfx.hit(); onBulletHit(b,e); } });
+    if(e.type!=='ab') bullets.forEach(b=>{ if(!b.dead&&e.hp>0&&!e.hide&&canHit(b,e)&&bulletHits(b,e.x,e.y,e.r)){ e.hp-=b.dmg; e.flash=4; sfx.hit(); onBulletHit(b,e); } });   // 抗体は自機の弾をすり抜ける
     if(e.hp<=0&&!e.dead){ e.dead=1; addScore(e.pts); explode(e.x,e.y,e.type==='phage'||e.type==='coccus'?12:24,e.type==='pneumo'||e.type==='coccus'?'#c49bff':undefined); sfx.boom();
       if(e.type==='chol'&&!e.minion) for(let k=0;k<3;k++){ const a=k*2.1; enemies.push({type:'cholbit',x:e.x,y:e.y,vx:Math.cos(a)*2,vy:Math.sin(a)*2,hp:1,r:10,flash:0,drop:false,pts:60}); }
       if(e.type==='alcohol') addFloater(e.x,e.y,'→ 無毒化');
@@ -3984,7 +4013,7 @@ function baseSlot(i){ const s=baseSlot0(i); return Object.assign({},s,{dx:s.dx*P
 function baseSlot0(i){ if(optionCount===1) return {dx:58,dy:SWAY(),ang:0};   // 1個のときはどのモードでも自機正面で上下に揺れる
   if(formation==='focus'){ const d=(FOCUS_DY[Math.max(1,Math.min(4,optionCount))]||[])[i]; return d==='sway'?{dx:60,dy:SWAY(),ang:0}:{dx:50,dy:d===undefined?0:d,ang:0}; } return spreadSlot(i); }
 function optSlot(i){ if(fzS.active&&fz[i]) return {abs:true,x:fz[i].x,y:fz[i].y,ang:0}; return baseSlot(i); }
-function resetFreeze(){ fz=[]; fzS={active:false,until:0,cdEnd:0}; }
+function resetFreeze(){ fzFx=[]; fz=[]; fzS={active:false,until:0,cdEnd:0}; }
 function endFreeze(){ if(!fzS.active)return; fz=[]; fzS.active=false; fzS.cdEnd=t+FZ_WAIT; }
 // FREEZE：押した瞬間、自機の前方に縦一列（FOCUSの形）でまとめて設置。5秒後に戻り、5秒待つと再び使える
 function triggerFreeze(){
@@ -4012,6 +4041,24 @@ function updateOptions(){
   optPts.forEach((o,i)=>{ const sl=optSlot(i); if(sl.abs){ o.x+=(sl.x-o.x)*.3; o.y+=(sl.y-o.y)*.3; return; } o.x+=(player.x+sl.dx-o.x)*.18; o.y+=(player.y+sl.dy+Math.sin(t*.1+i)*2-o.y)*.18; });
 }
 function optionPos(i){ return optPts[i]||{x:player.x,y:player.y}; }
+// ---- FREEZEの盾：オプション2個以上でFREEZE中、縦一列のオプションを六角格子の障壁でつなぎ、触れた敵弾（撃ち落とせない弾・抗体も）を消す ----
+const FZ_PAD=16, FZ_HALF=14;   // 障壁の上下のはみ出し／横の厚みの半分
+let fzFx=[], fzSndT=0;
+function fzWall(){ const n=Math.min(fz.length,optionCount,optPts.length); if(!fzS.active||n<2||player.dead)return null;
+  let x=0,y0=1e9,y1=-1e9; for(let i=0;i<n;i++){ const o=optPts[i]; x+=o.x; if(o.y<y0)y0=o.y; if(o.y>y1)y1=o.y; }
+  return {x:x/n,y0:y0-FZ_PAD,y1:y1+FZ_PAD}; }
+function fzShield(){ const w=fzWall(); if(fzFx.length)fzFx=fzFx.filter(f=>++f.f<22); if(!w)return;
+  let hit=0; const blk=(x,y,r)=>Math.abs(x-w.x)<FZ_HALF+r&&y>w.y0-r&&y<w.y1+r;
+  for(const b of eBullets){ if(!b.dead&&blk(b.x,b.y,b.r||4)){ b.dead=1; hit++; if(fzFx.length<24)fzFx.push({x:w.x,y:clamp(b.y,w.y0,w.y1),f:0}); } }
+  for(const e of enemies){ if(e.type==='ab'&&!e.dead&&blk(e.x,e.y,6)){ e.dead=1; hit++; if(fzFx.length<24)fzFx.push({x:w.x,y:clamp(e.y,w.y0,w.y1),f:0}); } }
+  if(hit&&t-fzSndT>6){ fzSndT=t; sfx.guard8(); } }
+function fzHex(path,cx,cy,r){ for(let i=0;i<6;i++){ const a=i*Math.PI/3+Math.PI/6, x=cx+Math.cos(a)*r, y=cy+Math.sin(a)*r; i?path.lineTo(x,y):path.moveTo(x,y); } path.closePath(); }
+function drawFzShield(){ const w=fzWall(); if(w){ const k=clamp((fzS.until-t)/40,0,1), a=(.22+.08*Math.sin(t*.12))*(.4+.6*k);   // 残り時間が少ないと薄くなる
+    ctx.save(); ctx.fillStyle=`rgba(62,242,208,${a*.35})`; ctx.fillRect(w.x-FZ_HALF,w.y0,FZ_HALF*2,w.y1-w.y0);
+    ctx.beginPath(); for(let y=w.y0+7,r=0;y<w.y1-3;y+=12,r++) for(let c=-1;c<=1;c++) fzHex(ctx,w.x+c*10.4,y+(c?6:0),6.5);   // 六角格子は1本の線にまとめて1回で描く
+    ctx.strokeStyle=`rgba(62,242,208,${a*2})`; ctx.lineWidth=1; ctx.stroke();
+    ctx.strokeStyle=`rgba(190,255,245,${a*2.6})`; ctx.lineWidth=1.5; ctx.beginPath(); ctx.moveTo(w.x-FZ_HALF,w.y0); ctx.lineTo(w.x-FZ_HALF,w.y1); ctx.moveTo(w.x+FZ_HALF,w.y0); ctx.lineTo(w.x+FZ_HALF,w.y1); ctx.stroke(); ctx.restore(); }
+  if(fzFx.length){ ctx.save(); ctx.lineWidth=2; for(const f of fzFx){ const q=f.f/22; ctx.strokeStyle=`rgba(62,242,208,${1-q})`; ctx.beginPath(); fzHex(ctx,f.x,f.y,6+q*24); fzHex(ctx,f.x,f.y,3+q*12); ctx.stroke(); } ctx.restore(); } }
 // 出現の重み：Nカプセル（ノーマルに戻す）は他の武器の半分の頻度。他の比率は以前と同じ
 const ITEM_TYPES=['A','A','O','O','O','O','S','S','D','D','T','T','W','W','L','L','F','F','R','R','N'];
 const ITEM_COLORS={B:'#b8fff0',N:'#3ef2d0',D:'#ffd23e',T:'#7dff6a',L:'#ff8cf0',F:'#ff9a3c',R:'#c49bff',W:'#9affd1',A:'#ffffff',O:'#ff5a3c',S:'#6fd0ff'};
@@ -4297,6 +4344,7 @@ function draw(){
     ctx.restore(); });
   floaters.forEach(f=>{ ctx.globalAlpha=Math.min(1,f.life/20); ctx.fillStyle=f.c; ctx.font='15px DotGothic16'; ctx.textAlign='center'; ctx.fillText(f.text,f.x,f.y); }); ctx.globalAlpha=1;
   if(!player.dead)drawAllies(player.x,player.y);
+  drawFzShield();
   if(!player.dead){ for(let i=0;i<optionCount;i++){const p=optionPos(i);drawOrb(p.x,p.y);} drawShip(player.x,player.y,player.inv>0&&!shield); drawShield(); if(mark7>0)drawMark7(); }
   particles.forEach(p=>{ ctx.globalAlpha=Math.min(1,p.life/30); ctx.fillStyle=p.c; ctx.fillRect(p.x,p.y,3,3); }); ctx.globalAlpha=1;
   drawBomb();
@@ -4506,6 +4554,7 @@ function tickOnly(){   // 描画なしで1回分だけ進める
   else if(state==='opening'&&op) updateOpening();
   else if(state==='ending'&&en) updateEnding();
   else if(state==='special'&&sp) updateSpecial(); }
+let inShopOn=false;
 function loop(now){ requestAnimationFrame(loop);
   now=now||performance.now(); let d=_lastT?now-_lastT:STEP_MS; _lastT=now;
   if(d>250) d=STEP_MS;                       // タブ切替などで長く止まった後は1回分として扱う
@@ -4514,6 +4563,7 @@ function loop(now){ requestAnimationFrame(loop);
   if(isBgmPlaying) pumpBGM();
   for(let i=1;i<n;i++) tickOnly();
   perfWatch(n, now); updBombBtn();
+  { const sh=state==='warp'&&!!(warp&&warp.shop); if(sh!==inShopOn){ inShopOn=sh; document.body.classList.toggle('inShop',sh); } }
   { const on=['play','boss'].includes(state);   /* デモ中もフォーメーションボタンを表示 */ if(on!==formBarOn){ formBarOn=on; $('formBar').style.visibility=on?'':'hidden'; } }   // フォーメーションボタンはステージ中のみ表示
   if(state==='title'){ drawTitle(); if(document.body.classList.contains('started')&&!nameOpen&&++idleTimer>=DEMO_DELAY)startDemo(); } else if(state==='play'||state==='boss'||state==='clear'){ update(); draw(); } else if(state==='warp'){ updateWarp(); if(warp)drawWarp(); else draw(); } else if(state==='opening'&&op){ updateOpening(); drawOpening(); } else if(state==='ending'&&en){ updateEnding(); drawEnding(); } else if(state==='special'&&sp){ updateSpecial(); drawSpecial(); } }
 // ---- 軽量化：重い端末だけ内部解像度を下げる（見た目の配置・大きさは同じ） ----
@@ -4577,7 +4627,7 @@ function showPauseCfg(on){ const pn=$('volPanel'), pm=$('pauseMenu');
   if(on){ if(!_vpHome)_vpHome={p:pn.parentNode,n:pn.nextSibling}; pm.insertBefore(pn,pm.querySelector('.row')); pn.classList.add('ingame','inPause'); pn.classList.remove('hidden'); }
   else if(_vpHome){ _vpHome.p.insertBefore(pn,_vpHome.n); pn.classList.remove('inPause'); pn.classList.add('hidden'); } }
 function resumeGame(){ if(state!=='pause')return; state=pausedFrom; pausedFrom=null; muteAll(false); $('pauseMenu').classList.add('hidden'); showPauseCfg(false); }
-function quitToTitle(){ if(state!=='pause')return; $('pauseMenu').classList.add('hidden'); showPauseCfg(false); muteAll(false); stopBGM(); boss=null; warp=null; state='over';
+function quitToTitle(){ if(state!=='pause')return; $('pauseMenu').classList.add('hidden'); showPauseCfg(false); muteAll(false); stopBGM(); boss=null; warp=null; gTimers=[]; state='over';
   showScreen(TITLE_HTML,'PC：矢印キー／WASDで移動、スペースで発射、Z／X／Cでフォーメーション<br>スマホ：画面をドラッグで移動（押している間は自動連射）','NEW GAME'); saveScore(); }
 $('pauseBtn').onclick=e=>{ e.stopPropagation(); pauseGame(); };
 $('pauseBtn').addEventListener('touchstart',e=>e.stopPropagation(),{passive:true});
@@ -4592,7 +4642,7 @@ function recordHi(){
 let hiNote=false;   // コンティニュー前に更新していたか
 function saveScore(){
   if(demo)return;
-  if(recordHi()||hiNote) $('subLine').innerHTML+='<br><span style="color:#ffd23e">★ HI-SCORE 更新！</span>';
+  if(recordHi()||hiNote) $('subLine').innerHTML+='<br><span style="color:#ffd23e">'+STAR_SVG+' HI-SCORE 更新！</span>';
   hiNote=false; refreshTitleInfo();
 }
 function openRunMenu(run){   // CONTINUEの確認：保存されている内容を見せてから、STARTで再開
@@ -4610,7 +4660,7 @@ function refreshTitleInfo(){
   const hi=lsGet(LS.hi,null);
   const cl=lsGet(LS_CLEAR,null);
   const ic=lsGet(LS_INFCLR,null);
-  $('hiLine').innerHTML=(cl?`<span style="color:#ffd23e">★CLEAR</span>${cl.count>1?'×'+cl.count:''}　`:'')+(ic?`<span style="color:#ff4a1f;text-shadow:0 0 8px rgba(255,40,0,.8)">★INFERNO CLEAR</span>${ic.count>1?'×'+ic.count:''}　`:'')+(hi?`HI-SCORE ${hi.score}　<small>（${modeLabel(hi.diff,hi.lives)}／STAGE ${hi.stage}到達・${hi.date}）</small>`:'');
+  $('hiLine').innerHTML=(cl?`<span style="color:#ffd23e">${STAR_SVG}CLEAR</span>${cl.count>1?'×'+cl.count:''}　`:'')+(ic?`<span style="color:#ff4a1f;text-shadow:0 0 8px rgba(255,40,0,.8)">${STAR_SVG}INFERNO CLEAR</span>${ic.count>1?'×'+ic.count:''}　`:'')+(hi?`HI-SCORE ${hi.score}　<small>（${modeLabel(hi.diff,hi.lives)}／STAGE ${hi.stage}到達・${hi.date}）</small>`:'');
   const max=progMax(), box=$('contBox'); box.innerHTML='';
   if(max>=2){ const bt=document.createElement('button'); bt.textContent='STAGE SELECT'; bt.onclick=ev=>{ ev.stopPropagation(); openStageMenu(); }; box.appendChild(bt); }
   const run=lsGet(LS.run,null), rb=$('resumeBox'); rb.innerHTML='';
@@ -4857,7 +4907,7 @@ function endEnding(){ unfadeBgm8(); const unl=en&&en.unlockNew, inf=en&&en.infDo
   toTitleAfterClear(); }
 function toTitleAfterClear(){ const s=score;  op=null; neuroHeal=0; vac8Grow=0; boss=null; state='over';
   showScreen(TITLE_HTML,'PC：矢印キー／WASDで移動、スペースで発射、Z／X／Cでフォーメーション<br>スマホ：画面をドラッグで移動（押している間は自動連射）','NEW GAME');
-  $('subLine').innerHTML+='<br><span style="color:#9fe8ff">★ ALL CLEAR ── FINAL SCORE '+s.toLocaleString()+'</span>'; saveScore(); }
+  $('subLine').innerHTML+='<br><span style="color:#9fe8ff">'+STAR_SVG+' ALL CLEAR ── FINAL SCORE '+s.toLocaleString()+'</span>'; saveScore(); }
 // ================= 特別演出：INFERNO解禁（HARDクリア後）／MISSION COMPLETE（INFERNOクリア後） =================
 let sp=null;
 const UNLOCK_LINE='……未登録の治療プロトコルを検出しました。致死率、測定不能。……{DR}、それでも進みますか';
@@ -5032,11 +5082,11 @@ const RETRO_SLOW=.02, RETRO_SHIP=.9, RETRO_FIN=1.06, RETRO_WP=['NORMAL','D','T',
 const RETRO_KEYS=['stage','boss','player','bullets','eBullets','enemies','particles','items','floaters','msg','shake','mid8','boss8Ph','vac8Grow','minionT','speed','talkQ','talkCur','demo','godMode','weapon','optionCount','formation'];
 function retroSwap(sc,fn){   // 場面の状態を一時的にゲーム本体の変数へ入れて処理し、元に戻す
   const K={state,stage,boss,player,bullets,eBullets,enemies,particles,items,floaters,msg,shake,mid8,boss8Ph,vac8Grow,minionT,speed,talkQ,talkCur,demo,godMode,weapon,optionCount,formation,t};
-  const sv={}; for(const k in sfx){ sv[k]=sfx[k]; sfx[k]=()=>{}; } const sto=window.setTimeout; window.setTimeout=()=>0;
+  const sv={}; for(const k in sfx){ sv[k]=sfx[k]; sfx[k]=()=>{}; } const sto=window.setTimeout; window.setTimeout=()=>0; _noLater++;
   ({stage,boss,player,bullets,eBullets,enemies,particles,items,floaters,msg,shake,mid8,boss8Ph,vac8Grow,minionT,speed,talkQ,talkCur,demo,godMode,weapon,optionCount,formation}=sc.g); t=sc.t;
   try{ fn(); }catch(e){}
   sc.g={stage,boss,player,bullets,eBullets,enemies,particles,items,floaters,msg,shake,mid8,boss8Ph,vac8Grow,minionT,speed,talkQ,talkCur,demo,godMode,weapon,optionCount,formation}; sc.t=t;
-  window.setTimeout=sto; for(const k in sv)sfx[k]=sv[k];
+  window.setTimeout=sto; _noLater--; for(const k in sv)sfx[k]=sv[k];
   ({state,stage,boss,player,bullets,eBullets,enemies,particles,items,floaters,msg,shake,mid8,boss8Ph,vac8Grow,minionT,speed,talkQ,talkCur,demo,godMode,weapon,optionCount,formation,t}=K); }
 function retroScene(st,mid,wp){
   const sc={t:t,acc:0,fireT:0,g:{stage:st,boss:null,player:{x:140,y:H/2,vx:0,vy:0,cd:0,inv:99999,dead:0,stun:0},bullets:[],eBullets:[],enemies:[],particles:[],items:[],floaters:[],msg:null,shake:0,
@@ -5154,7 +5204,7 @@ function enResult(lt){ ctx.fillStyle='#04010c'; ctx.fillRect(0,0,W,H); en.stars.
   const P=SHIP_PAL[en.tier], rows=[['残機ボーナス',en.lifeB.toLocaleString()],['クリアボーナス',en.clearB.toLocaleString()],['モード',modeLabel(cfg.diff,cfg.lives)],['プレイ時間',playTimeStr(en.time)],['機体の最終段階',P.name]];
   rows.forEach(([k,v],i)=>{ const yy=192+i*36, ra=clamp((lt-30-i*14)/20,0,1); ctx.globalAlpha=a*ra; enText(k,220,yy,20,'#bfb4e8','left'); enText(v,W-220,yy,22,i===4?P.m2:'#fff','right'); ctx.fillStyle='rgba(159,232,255,.15)'; ctx.fillRect(220,yy+10,W-440,1); });
   const fa=clamp((lt-110)/30,0,1); ctx.globalAlpha=a*fa; enText('FINAL SCORE',W/2,388,18,'#9fe8ff','center'); enText(score.toLocaleString(),W/2,420,40,'#ffe27a','center',"44px 'VT323','DotGothic16',monospace");
-  if(en.newHi&&lt>150){ ctx.globalAlpha=.6+.4*Math.sin(t*.15); enText('★ HI-SCORE 更新！',W/2,462,24,'#ffd23e','center'); }
+  if(en.newHi&&lt>150){ ctx.globalAlpha=.6+.4*Math.sin(t*.15); { ctx.font='24px DotGothic16'; const hw=ctx.measureText('HI-SCORE 更新！').width; cvStar(W/2+14-hw/2-16,462-9,11,'#ffd23e'); enText('HI-SCORE 更新！',W/2+14,462,24,'#ffd23e','center'); } }
   ctx.globalAlpha=a; ctx.save(); ctx.translate(W-120,110); ctx.scale(1.3,1.3); drawShip(0,0,false); ctx.restore();
   if(lt>90){ ctx.globalAlpha=.5+.5*Math.sin(t*.1); enText('タップ / スペースでタイトルへ',W/2,H-30,16,'#c9a2ff','center'); } ctx.globalAlpha=1; }
 
