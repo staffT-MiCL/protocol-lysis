@@ -137,6 +137,11 @@
   #formBar .gauge{position:absolute;left:0;bottom:0;height:3px;width:0;background:#ffd23e}
   #hud.hidden~#formBar{display:none}
   #test{position:absolute;left:12px;bottom:62px;display:flex;gap:6px;align-items:center;font-size:13px;color:var(--dim);flex-wrap:wrap}
+  /* デバッグパネルの表示／非表示：隠している間は切替ボタンだけを、右側（ショップのCREDITと機体の枠の間のすき間）に小さく残す */
+  #test #dbgTog{margin-left:auto;border-color:#ffd23e;color:#ffd23e}
+  #test.col{left:auto;right:1.3%;top:22%;bottom:auto}
+  #test.col>*:not(#dbgTog){display:none}
+  #test.col #dbgTog{font-size:12px;padding:3px 8px;min-width:0;opacity:.8}
   #test button{font:inherit;font-size:14px;min-width:38px;padding:5px 8px;background:rgba(10,4,30,.75);color:var(--ink);border:1px solid var(--dim);border-radius:6px;cursor:pointer}
   #test button.on{background:var(--plasma);color:var(--bg);border-color:var(--plasma)}
   /* スマホ：アドレスバー等を除いた実際の表示高さ(dvh)に合わせる */
@@ -221,7 +226,7 @@
     <button data-w="NORMAL">N</button><button data-w="D">D</button><button data-w="W">W</button><button data-w="T">T</button>
     <button data-w="L">L</button><button data-w="F">F</button><button data-w="R">R</button><button data-a="1">A＋</button><button data-o="1">O＋</button><button data-s="1">S</button><button data-g="1" id="godBtn">無敵 OFF</button>
     <span style="margin-left:8px">BASE</span><button data-b="pw">POW＋</button><button data-b="sh">SHOT＋</button><button data-b="mv">MOVE＋</button><button data-br="1">BASE 0</button><span id="baseInfo">0/11 通常</span>
-    <span style="margin-left:8px">STAGE</span><button data-st="1">1</button><button data-st="2">2</button><button data-st="3">3</button><button data-st="4">4</button><button data-st="5">5</button><button data-st="6">6</button><button data-st="7">7</button><button data-st="8">8</button><button data-dk="b">BOSS</button><button data-dk="n">CLEAR</button>
+    <span style="margin-left:8px">STAGE</span><button data-st="1">1</button><button data-st="2">2</button><button data-st="3">3</button><button data-st="4">4</button><button data-st="5">5</button><button data-st="6">6</button><button data-st="7">7</button><button data-st="8">8</button><button data-dk="b">BOSS</button><button data-dk="n">CLEAR</button><button data-tog="1" id="dbgTog">非表示</button>
   </div>
   <div id="nameMenu" class="ovl hidden"><h2 style="font-size:36px">ENTER YOUR NAME</h2><p>8文字まで・日本語や記号も使えます（空欄のときは Dr.T）</p>
     <div class="nm">Dr.<input id="nameInput" maxlength="8" autocomplete="off" autocapitalize="characters" spellcheck="false" enterkeyhint="done"></div>
@@ -5314,7 +5319,12 @@ function showToast(s){ const e=$('dbgToast'); e.textContent=s; e.classList.remov
 addEventListener('keydown',e=>{ if(e.key==='F'||e.key==='f'){ debug=!debug; $('test').classList.toggle('hidden',!debug||state==='title'); updBaseInfo(); } });
 // 武器テスト（ボタンと数字キー1〜0）
 function updBaseInfo(){ const e=$('baseInfo'); if(e) e.textContent=`${baseTotal()}/11 ${SHIP_PAL[shipTier()].name}（P${base.pw} S${base.sh} M${base.mv}）`; }
-function testPick(el){ if(!el)return; if(el.dataset.st){ debugJump(+el.dataset.st); return; } if(el.dataset.dk){ debugKey(el.dataset.dk); return; }
+// デバッグパネルのボタンを隠す／出す（隠した状態は端末に覚えておく。キー操作は隠していても使える）
+let dbgCol=!!lsGet('gv2_dbgcol',false);
+function applyDbgCol(){ $('test').classList.toggle('col',dbgCol); $('dbgTog').textContent=dbgCol?'DEBUG 表示':'非表示'; }
+function toggleDbg(){ dbgCol=!dbgCol; lsSet('gv2_dbgcol',dbgCol); applyDbgCol(); }
+applyDbgCol();
+function testPick(el){ if(!el)return; if(el.dataset.tog){ toggleDbg(); return; } if(el.dataset.st){ debugJump(+el.dataset.st); return; } if(el.dataset.dk){ debugKey(el.dataset.dk); return; }
   if(el.dataset.b){ const k=el.dataset.b; if(base[k]<BASE_MAX[k]){ base[k]++; sfx.item(); } updBaseInfo(); return; }   // 基礎性能を1段階上げる（機体デザインも変わる）
   if(el.dataset.br){ base.pw=base.sh=base.mv=0; sfx.item(); updBaseInfo(); return; }   // 基礎性能を0に戻す
   if(el.dataset.g){ godMode=!godMode; el.textContent='無敵 '+(godMode?'ON':'OFF'); el.classList.toggle('on',godMode); sfx.item(); return; } if(el.dataset.w)weapon=el.dataset.w; if(el.dataset.a&&speedLv<4)speedLv++; if(el.dataset.o&&optionCount<4)optionCount++; if(el.dataset.s)shield=3; sfx.item(); updateWeaponHud(); }
