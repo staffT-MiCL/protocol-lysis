@@ -1340,6 +1340,18 @@ const stars=Array.from({length:110},()=>({x:Math.random()*W,y:Math.random()*H,z:
 const nebulae=Array.from({length:6},(_,i)=>({x:i*260,y:80+Math.random()*380,r:140+Math.random()*120,hue:[285,330,200,300,340,260][i]}));
 const rbcs=Array.from({length:14},()=>newRBC(Math.random()*W));
 function newRBC(x){ return {x,y:60+Math.random()*(H-120),r:10+Math.random()*16,rot:Math.random()*6,vr:(Math.random()-.5)*.03,vy:(Math.random()-.5)*.3,z:.35+Math.random()*.5}; }
+// ---- 軽量化：形も色も変わらない円形グラデーションは、最初に1回だけ描いた画像を貼る（見た目は同じ） ----
+const _radC=new Map();
+function radSpr(x,y,r,c0,c1){ const k=c0+'|'+c1+'|'+r; let c=_radC.get(k);
+  if(!c){ if(_radC.size>120)_radC.clear(); const S=Math.ceil(r*2); c=document.createElement('canvas'); c.width=c.height=S;
+    const g2=c.getContext('2d'), g=g2.createRadialGradient(r,r,0,r,r,r); g.addColorStop(0,c0); g.addColorStop(1,c1); g2.fillStyle=g; g2.fillRect(0,0,S,S); _radC.set(k,c); }
+  ctx.drawImage(c,x-r,y-r); }
+const _rbcC=new Map();
+function rbcSpr(r){ const k=Math.round(r*10); let c=_rbcC.get(k);
+  if(!c){ if(_rbcC.size>200)_rbcC.clear(); const R=k/10, S=Math.ceil(R*2)+4; c=document.createElement('canvas'); c.width=c.height=S;
+    const x=c.getContext('2d'); x.translate(S/2,S/2); x.beginPath(); x.ellipse(0,0,R,R*.8,0,0,Math.PI*2); const g=x.createRadialGradient(0,0,R*.1,0,0,R);
+    g.addColorStop(0,'#5a0a18');g.addColorStop(.45,'#a3162b');g.addColorStop(.85,'#e0344a');g.addColorStop(1,'#7a0f1e'); x.fillStyle=g; x.fill(); _rbcC.set(k,c); }
+  return c; }
 function drawBackground(){
   if(stage===2)return drawLungBg();
   if(stage===3)return drawGutBg();
@@ -1350,8 +1362,7 @@ function drawBackground(){
   if(stage===8)return drawNeuroBg();
   ctx.fillStyle='#05021a'; ctx.fillRect(0,0,W,H);
   nebulae.forEach(n=>{ let x=((n.x-scroll*.08)%(W+560)+W+560)%(W+560)-280;
-    const g=ctx.createRadialGradient(x,n.y,0,x,n.y,n.r); g.addColorStop(0,`hsla(${n.hue},90%,45%,.22)`); g.addColorStop(1,'hsla(0,0%,0%,0)');
-    ctx.fillStyle=g; ctx.fillRect(x-n.r,n.y-n.r,n.r*2,n.r*2); });
+    radSpr(x,n.y,n.r,`hsla(${n.hue},90%,45%,.22)`,'hsla(0,0%,0%,0)'); });
   // 毛細血管のネットワーク（遠景）
   ctx.strokeStyle='rgba(180,60,140,.12)'; ctx.lineWidth=1.5;
   for(let k=0;k<5;k++){ ctx.beginPath(); for(let x=0;x<=W;x+=20){ const wx=x+scroll*.18;
@@ -1401,8 +1412,7 @@ function drawHeartBg(){
 function drawLiverBg(){
   ctx.fillStyle='#120503'; ctx.fillRect(0,0,W,H);
   nebulae.forEach((n,i)=>{ let x=((n.x-scroll*.08)%(W+560)+W+560)%(W+560)-280;
-    const g=ctx.createRadialGradient(x,n.y,0,x,n.y,n.r); g.addColorStop(0,`hsla(${[18,40,8,30,45,355][i]},85%,42%,.18)`); g.addColorStop(1,'hsla(0,0%,0%,0)');
-    ctx.fillStyle=g; ctx.fillRect(x-n.r,n.y-n.r,n.r*2,n.r*2); });
+    radSpr(x,n.y,n.r,`hsla(${[18,40,8,30,45,355][i]},85%,42%,.18)`,'hsla(0,0%,0%,0)'); });
   // 遠景：肝小葉のハチの巣模様（中心に中心静脈）
   const R6=70, dx=R6*1.5, dy=R6*Math.sqrt(3), off=(scroll*.15)%(dx*2);
   ctx.lineWidth=1.5;
@@ -1415,8 +1425,7 @@ function drawLiverBg(){
 function drawGutBg(){
   ctx.fillStyle='#120705'; ctx.fillRect(0,0,W,H);
   nebulae.forEach((n,i)=>{ let x=((n.x-scroll*.08)%(W+560)+W+560)%(W+560)-280;
-    const g=ctx.createRadialGradient(x,n.y,0,x,n.y,n.r); g.addColorStop(0,`hsla(${[20,38,350,12,30,48][i]},90%,45%,.18)`); g.addColorStop(1,'hsla(0,0%,0%,0)');
-    ctx.fillStyle=g; ctx.fillRect(x-n.r,n.y-n.r,n.r*2,n.r*2); });
+    radSpr(x,n.y,n.r,`hsla(${[20,38,350,12,30,48][i]},90%,45%,.18)`,'hsla(0,0%,0%,0)'); });
   // 遠景の柔毛のシルエット
   for(const top of[1,0]) for(let i=-1;i<16;i++){ const off=scroll*.18, x=i*70-(off%70)+(top?0:35), id=i+Math.floor(off/70), L=90+70*hash(id*3+(top?1:2));
     const sw=6*Math.sin(t*.03+id); ctx.fillStyle='rgba(230,120,70,.08)'; ctx.beginPath();
@@ -1431,8 +1440,7 @@ function drawGutBg(){
 function drawLungBg(){
   ctx.fillStyle='#050d22'; ctx.fillRect(0,0,W,H);
   nebulae.forEach((n,i)=>{ let x=((n.x-scroll*.08)%(W+560)+W+560)%(W+560)-280;
-    const g=ctx.createRadialGradient(x,n.y,0,x,n.y,n.r); g.addColorStop(0,`hsla(${[205,190,330,215,200,345][i]},90%,50%,.18)`); g.addColorStop(1,'hsla(0,0%,0%,0)');
-    ctx.fillStyle=g; ctx.fillRect(x-n.r,n.y-n.r,n.r*2,n.r*2); });
+    radSpr(x,n.y,n.r,`hsla(${[205,190,330,215,200,345][i]},90%,50%,.18)`,'hsla(0,0%,0%,0)'); });
   stars.forEach(s=>{ s.x-=s.z*speed*.6+.05; if(s.x<0){s.x=W;s.y=Math.random()*H;}
     const a=.3+.7*Math.abs(Math.sin(t*.03+s.tw)); ctx.fillStyle=`rgba(200,230,255,${a*s.z})`; ctx.fillRect(s.x,s.y,s.z*2,s.z*2); });
   // 遠景の肺胞（呼吸に合わせてふくらむ泡）
@@ -1445,10 +1453,8 @@ function drawLungBg(){
   o2s.forEach(o=>{ o.x-=speed*o.z+.2; if(o.x<-5){o.x=W+5;o.y=Math.random()*H;}
     ctx.fillStyle=`rgba(140,220,255,${.35+.4*o.z})`; ctx.beginPath(); ctx.arc(o.x,o.y+Math.sin(t*.04+o.ph)*4,1.5+o.z,0,Math.PI*2); ctx.fill(); });
 }
-function drawRBC(x,y,r,rot,a){ ctx.save(); ctx.translate(x,y); ctx.rotate(rot); ctx.globalAlpha=a;
-  ctx.beginPath(); ctx.ellipse(0,0,r,r*.8,0,0,Math.PI*2); const g=ctx.createRadialGradient(0,0,r*.1,0,0,r);
-  g.addColorStop(0,'#5a0a18');g.addColorStop(.45,'#a3162b');g.addColorStop(.85,'#e0344a');g.addColorStop(1,'#7a0f1e');
-  ctx.fillStyle=g; ctx.fill(); ctx.restore(); ctx.globalAlpha=1; }
+function drawRBC(x,y,r,rot,a){ const c=rbcSpr(r); ctx.save(); ctx.translate(x,y); ctx.rotate(rot); ctx.globalAlpha=a;
+  ctx.drawImage(c,-c.width/2,-c.height/2); ctx.restore(); ctx.globalAlpha=1; }
 
 // ---------------- 自機（前作の機体を右向きに） ----------------
 // ---- 自機パーツ用ヘルパー ----
@@ -1900,8 +1906,7 @@ const lymFar=Array.from({length:16},()=>({x:Math.random()*1400,y:60+Math.random(
 function drawLymphBg(){
   ctx.fillStyle='#0d0618'; ctx.fillRect(0,0,W,H);
   lymBlobs.forEach(b=>{ const x=((b.x-scroll*b.z)%(W+500)+W+500)%(W+500)-250;
-    const g=ctx.createRadialGradient(x,b.y,0,x,b.y,b.r); g.addColorStop(0,b.milk?'rgba(225,235,210,.10)':'rgba(170,120,230,.12)'); g.addColorStop(1,'rgba(0,0,0,0)');
-    ctx.fillStyle=g; ctx.fillRect(x-b.r,b.y-b.r,b.r*2,b.r*2); });
+    radSpr(x,b.y,b.r,b.milk?'rgba(225,235,210,.10)':'rgba(170,120,230,.12)','rgba(0,0,0,0)'); });
   ctx.strokeStyle='rgba(200,230,210,.06)'; ctx.lineWidth=1.2;                   // 遠景の網目
   for(let k=0;k<8;k++){ const x0=((k*170-scroll*.12)%1360+1360)%1360-200; ctx.beginPath(); ctx.moveTo(x0,40); ctx.lineTo(x0+60,H/2); ctx.lineTo(x0+10,H-40); ctx.moveTo(x0+60,H/2); ctx.lineTo(x0+150,H/2-90); ctx.stroke(); }
   lymFar.forEach(c=>{ const x=((c.x-scroll*c.z)%1400+1400)%1400-100, y=c.y+Math.sin(t*.015+c.ph)*6;       // 遠くを漂うリンパ球
@@ -4077,8 +4082,44 @@ function fireTitleBullet(){ initAudio(); if(ac.state==='suspended')ac.resume();
   if(!isBgmPlaying)startTitleBGM();
   titleBullets.push({x:titleShip.x+40,y:titleShip.y,vx:13}); sfx.shoot(); }
 let formBarOn=null;
-function loop(){ { const on=['play','boss'].includes(state);   /* デモ中もフォーメーションボタンを表示 */ if(on!==formBarOn){ formBarOn=on; $('formBar').style.visibility=on?'':'hidden'; } }   // フォーメーションボタンはステージ中のみ表示
-  if(state==='title'){ drawTitle(); if(document.body.classList.contains('started')&&!nameOpen&&++idleTimer>=DEMO_DELAY)startDemo(); } else if(state==='play'||state==='boss'||state==='clear'){ update(); draw(); } else if(state==='warp'){ updateWarp(); if(warp)drawWarp(); else draw(); } else if(state==='opening'&&op){ updateOpening(); drawOpening(); } else if(state==='ending'&&en){ updateEnding(); drawEnding(); } requestAnimationFrame(loop); }
+// ---- 軽量化：ゲームの進み方を端末の速さに左右されないようにする ----
+// 1/60秒ごとに「更新」を行い、描画が間に合わないときは更新だけ追加で行う（最大3回）。
+// 遅い端末でもスローモーションにならず、120Hzの画面でも倍速にならない。
+const STEP_MS=1000/60, MAX_STEPS=3;
+let _lastT=0, _acc=0;
+function tickOnly(){   // 描画なしで1回分だけ進める
+  if(state==='title'){ if(document.body.classList.contains('started')&&!nameOpen&&++idleTimer>=DEMO_DELAY)startDemo(); }
+  else if(state==='play'||state==='boss'||state==='clear') update();
+  else if(state==='warp') updateWarp();
+  else if(state==='opening'&&op) updateOpening();
+  else if(state==='ending'&&en) updateEnding(); }
+function loop(now){ requestAnimationFrame(loop);
+  now=now||performance.now(); let d=_lastT?now-_lastT:STEP_MS; _lastT=now;
+  if(d>250) d=STEP_MS;                       // タブ切替などで長く止まった後は1回分として扱う
+  _acc+=d; let n=Math.floor(_acc/STEP_MS); if(n<1) return;
+  _acc-=n*STEP_MS; if(n>MAX_STEPS){ n=MAX_STEPS; _acc=0; }
+  for(let i=1;i<n;i++) tickOnly();
+  perfWatch(n, now);
+  { const on=['play','boss'].includes(state);   /* デモ中もフォーメーションボタンを表示 */ if(on!==formBarOn){ formBarOn=on; $('formBar').style.visibility=on?'':'hidden'; } }   // フォーメーションボタンはステージ中のみ表示
+  if(state==='title'){ drawTitle(); if(document.body.classList.contains('started')&&!nameOpen&&++idleTimer>=DEMO_DELAY)startDemo(); } else if(state==='play'||state==='boss'||state==='clear'){ update(); draw(); } else if(state==='warp'){ updateWarp(); if(warp)drawWarp(); else draw(); } else if(state==='opening'&&op){ updateOpening(); drawOpening(); } else if(state==='ending'&&en){ updateEnding(); drawEnding(); } }
+// ---- 軽量化：重い端末だけ内部解像度を下げる（見た目の配置・大きさは同じ） ----
+// ステージ中に描画が60fpsの8割に届かない状態が続いたら、960×540 → 720×405 に切り替える（1回だけ）。
+// URLに ?res=1 を付けると常に高画質、?res=0.75 で常に軽量。?fps=1 で右上にFPSを表示。
+let RS=1;
+const _q=new URLSearchParams(location.search), _resFix=parseFloat(_q.get('res'));
+function setRes(k){ RS=k; cv.width=Math.round(W*k); cv.height=Math.round(H*k); ctx.setTransform(k,0,0,k,0,0); }
+const _pw={frames:0,steps:0,warm:0,done:!!_resFix,fpsN:0,fpsT:0,el:null};
+if(_resFix>0&&_resFix<1) setRes(_resFix);
+if(_q.get('fps')==='1'){ const e=document.createElement('div'); e.style.cssText='position:fixed;top:4px;right:6px;z-index:9999;font:12px monospace;color:#3ef2d0;background:rgba(0,0,0,.55);padding:2px 6px;pointer-events:none'; document.body.appendChild(e); _pw.el=e; }
+function perfWatch(n, now){
+  if(_pw.el){ _pw.fpsN++; if(now-_pw.fpsT>=1000){ _pw.el.textContent=Math.round(_pw.fpsN*1000/(now-_pw.fpsT))+' fps / 画質 '+(RS===1?'高':'軽量'); _pw.fpsN=0; _pw.fpsT=now; } }
+  if(_pw.done) return;
+  if(!(state==='play'||state==='boss')){ _pw.warm=0; _pw.frames=_pw.steps=0; return; }
+  if(++_pw.warm<90) return;                  // ステージ開始直後の読み込みの揺れは数えない
+  _pw.frames++; _pw.steps+=n;
+  if(_pw.frames>=180){                       // 約3秒ぶんで判定
+    if(_pw.steps/_pw.frames>1.25){ setRes(.75); _pw.done=true; }
+    _pw.frames=_pw.steps=0; } }
 function gameOver(){
   if(state!=='play'&&state!=='boss')return;
   if(demo){ state='clear'; msg={text:'GAME OVER',sub:'',life:120}; setTimeout(()=>{ if(demo){ reset(); state='play'; } },2000); return; }
@@ -4298,8 +4339,8 @@ function opLaunch(){ const lt=op.t-OP_L1; opScan();
     if(k>=OP_TN){ ctx.fillStyle='#fff'; ctx.fillRect(0,0,W,H); } }   // 白画面のまま少し止めてから、ゲーム開始
   if(lt>OP_LA-30&&lt<=OP_LA){ ctx.fillStyle=`rgba(255,255,255,${(lt-(OP_LA-30))/30})`; ctx.fillRect(0,0,W,H); }
   ctx.restore(); }
-function opGlitch(k){ for(let i=0;i<6;i++){ const yy=Math.random()*H, hh=4+Math.random()*30; ctx.drawImage(cv,0,yy,W,hh,(Math.random()-.5)*60*k,yy,W,hh); } ctx.fillStyle=`rgba(255,46,74,${.15*k})`; ctx.fillRect(0,0,W,H); }
-function drawOpening(){ ctx.save(); ctx.setTransform(1,0,0,1,0,0); ctx.fillStyle='#03010a'; ctx.fillRect(0,0,W,H);
+function opGlitch(k){ for(let i=0;i<6;i++){ const yy=Math.random()*H, hh=4+Math.random()*30; ctx.drawImage(cv,0,yy*RS,W*RS,hh*RS,(Math.random()-.5)*60*k,yy,W,hh); } ctx.fillStyle=`rgba(255,46,74,${.15*k})`; ctx.fillRect(0,0,W,H); }
+function drawOpening(){ ctx.save(); ctx.setTransform(RS,0,0,RS,0,0); ctx.fillStyle='#03010a'; ctx.fillRect(0,0,W,H);
   if(op.t<OP_B1) opBriefing(); else if(op.t<OP_L1) opBootlog(); else opLaunch();
   if(Math.abs(op.t-OP_B1)<14) opGlitch(1-Math.abs(op.t-OP_B1)/14); if(Math.abs(op.t-OP_L1)<10) opGlitch(1-Math.abs(op.t-OP_L1)/10); if(Math.random()<.004&&op.t<OP_L1) opGlitch(.4);
   const v=ctx.createRadialGradient(W/2,H/2,H*.3,W/2,H/2,H*.9); v.addColorStop(0,'rgba(0,0,0,0)'); v.addColorStop(1,'rgba(0,0,0,.55)'); ctx.fillStyle=v; ctx.fillRect(0,0,W,H);
@@ -4375,7 +4416,7 @@ function enText(s,x,y,px,col,al='left',font,mw){ ctx.font=font||`${px}px DotGoth
 let enTickF=-1; const JP_RE=/[\u3040-\u30ff\u3400-\u9fff\uff00-\uffef\u3000-\u303f]/;   /* ひらがな・カタカナ・漢字・全角記号 */ const EN_SIL='、。…・　 ，．,.!?！？「」（）／-—';
 function enTyp(s,st,sp,lt){ const n=Math.max(0,Math.floor((lt-st)*sp)), m=[...s], n0=Math.max(0,Math.floor((lt-1-st)*sp));
   if(n>0&&n<=m.length&&n!==n0&&!EN_SIL.includes(m[n-1])&&enTickF!==en.t&&(sp<.5||en.t-enTickF>=3)){ enTickF=en.t; sfx.enTick(!JP_RE.test(s)); }   /* 音は文ごとに決める：日本語を含む文は、英字の部分も日本語の音 */ return m.slice(0,n).join(''); }   // 文字が増えたときだけ鳴らす（英語は高め、日本語は柔らかめ）
-function drawEnding(){ const [sc,lt]=[en.sc,en.lt]; ctx.save(); ctx.setTransform(1,0,0,1,0,0);
+function drawEnding(){ const [sc,lt]=[en.sc,en.lt]; ctx.save(); ctx.setTransform(RS,0,0,RS,0,0);
   if(sc>=1&&sc<=3){ ctx.fillStyle='#03010a'; ctx.fillRect(0,0,W,H); }   // 報告画面は毎回塗り直す
   if(sc===0) enTalkScene(lt); else if(sc===1) enReport(lt); else if(sc===2) enLog(lt); else if(sc===3) enNext(lt); else if(sc===4) enDive(lt); else if(sc===5) enStaff(lt); else enResult(lt);
   const fin=[en.A,en.B1,en.B2,en.cEnd,en.D,en.E][sc]; if(sc<5&&sc!==4&&sc!==2){ if(lt<30){ ctx.fillStyle=`rgba(0,0,0,${1-lt/30})`; ctx.fillRect(0,0,W,H); } if(fin-lt<30&&fin-lt>=0){ ctx.fillStyle=`rgba(0,0,0,${1-(fin-lt)/30})`; ctx.fillRect(0,0,W,H); } }
