@@ -256,6 +256,31 @@ const keys={};
 
 // ---------------- サウンド ----------------
 let ac=null,master=null,bgmGain=null,seGain=null,bgmTimer=null;
+// ---- 音声ノードの自動片付け（根本対策） ----
+// 1音ごとに作る発音部品（オシレーター・フィルター・音量など）は、鳴り終わっても「つながったまま」だと
+// iPad（Safari）では片付けられずに溜まり続け、音声処理がどんどん重くなって、最後は音が出なくなる。
+// そこで、音源が鳴り終わった時点で、その音専用の部品を自動で切り離す。共有の部品（全体音量・残響など）は切り離さない。
+let _persist=0;   // 1以上のあいだに作った部品は「共有」扱い
+(function(){
+  const AN=window.AudioNode&&AudioNode.prototype; if(!AN)return;
+  const oc=AN.connect;
+  AN.connect=function(d,...a){ const r=oc.call(this,d,...a);
+    if(d&&!this.__p){ (this.__outs||(this.__outs=[])).push(d); if(d instanceof AudioNode&&!d.__p) d.__ins=(d.__ins||0)+1; }
+    return r; };
+  function free(n){ if(n.__freed)return; n.__freed=1; const outs=n.__outs; n.__outs=null; try{ n.disconnect(); }catch(e){}
+    if(!outs)return;
+    for(const d of outs){ if(!(d instanceof AudioNode)||d.__p||d.__freed)continue;
+      if(--d.__ins<=0){ if(window.DelayNode&&d instanceof DelayNode) setTimeout(()=>free(d),3000); else free(d); } } }   // ディレイ（こだま）だけは余韻が消えてから
+  const protos=[window.BaseAudioContext,window.AudioContext,window.webkitAudioContext,window.OfflineAudioContext,window.webkitOfflineAudioContext].filter(Boolean).map(c=>c.prototype);
+  const kinds=['createGain','createBiquadFilter','createDelay','createWaveShaper','createDynamicsCompressor','createConvolver','createStereoPanner','createAnalyser'];
+  for(const P of protos){
+    for(const k of kinds){ if(!Object.prototype.hasOwnProperty.call(P,k))continue; const f=P[k]; if(!f||f.__w)continue; const w=function(...a){ const n=f.apply(this,a); if(this.__list)this.__list.push(n); if(_persist>0)n.__p=true; return n; }; w.__w=1; P[k]=w; }
+    for(const k of ['createOscillator','createBufferSource']){ if(!Object.prototype.hasOwnProperty.call(P,k))continue; const f=P[k]; if(!f||f.__w)continue;
+      const w=function(...a){ const n=f.apply(this,a); if(this.__list)this.__list.push(n); if(_persist>0){ n.__p=true; return n; } n.addEventListener('ended',()=>free(n)); return n; }; w.__w=1; P[k]=w; } }
+})();
+// 一時停止：音声の仕組みを止める（suspend）と、iPadでは再開後に音が出なくなることがあるため、止めずに全体の音量を0にする
+function muteAll(on){ if(!ac||!master)return; const n=ac.currentTime; master.gain.cancelScheduledValues(n); master.gain.setTargetAtTime(on?0:.8,n,.02); if(!on&&ac.state!=='running'){ try{ac.resume();}catch(e){} } }
+function persistNode(n){ if(n)n.__p=true; return n; }
 let vol={bgm:1,se:.3,bgmMute:false,seMute:false};   // 初期音量：BGM 100%・SE 30%
 // ---------------- コンフィグと端末保存 ----------------
 const DIFF={EASY:{n:.6,pts:.5},NORMAL:{n:1,pts:1},HARD:{n:1.5,pts:1.5}};
@@ -305,7 +330,8 @@ setInterval(()=>{ if(!ac||state==='pause')return;
   else { _acLast=-1; try{ ac.resume(); }catch(e){} } },1000);
 ['pointerdown','touchend','keydown'].forEach(ev=>addEventListener(ev,wakeAudio,true));
 document.addEventListener('visibilitychange',()=>{ if(!document.hidden) wakeAudio(); });
-function initAudio(){ if(ac)return; ac=new (window.AudioContext||window.webkitAudioContext)();
+function initAudio(){ if(ac)return; _persist++; try{ initAudio0(); } finally { _persist--; } }
+function initAudio0(){ ac=new (window.AudioContext||window.webkitAudioContext)();
   master=ac.createGain(); master.gain.value=.8;
   const lim=ac.createDynamicsCompressor(); lim.threshold.value=-8; lim.knee.value=6; lim.ratio.value=12; lim.attack.value=.003; lim.release.value=.2;   // リミッター：BGMとSEが重なっても音割れしないように
   master.connect(lim); lim.connect(ac.destination);
@@ -320,7 +346,8 @@ function noise(d,v=.3,freq=1200){ if(!ac)return; const b=NB(d); const s=ac.creat
 // ---- シリアス化したSE（工程1）：低く・短く・乾いた音。すべて seGain 経由なのでSEスライダー/OFFが効く ----
 // ftone：ローパスフィルター付きの音（cut=フィルターの周波数）。rev=trueで残響バスにも少し送る
 let seVerb=null;
-function getSeVerb(){ if(seVerb||!ac)return seVerb; const d=ac.createDelay(1),fb=ac.createGain(),lp=ac.createBiquadFilter(),out=ac.createGain();
+function getSeVerb(){ _persist++; try{ return getSeVerb0(); } finally { _persist--; } }
+function getSeVerb0(){ if(seVerb||!ac)return seVerb; const d=ac.createDelay(1),fb=ac.createGain(),lp=ac.createBiquadFilter(),out=ac.createGain();
   d.delayTime.value=.17; fb.gain.value=.38; lp.type='lowpass'; lp.frequency.value=1200; out.gain.value=.5;
   d.connect(lp); lp.connect(fb); fb.connect(d); lp.connect(out); out.connect(seGain); seVerb=d; return d; }
 function ftone(f,d,type='sawtooth',v=.1,f2=null,delay=0,cut=1200,rev=false,atk=.004){ if(!ac)return; const n=ac.currentTime+delay,o=ac.createOscillator(),fl=ac.createBiquadFilter(),g=ac.createGain();
@@ -508,7 +535,8 @@ function stopBGM(){ isBgmPlaying=false; currentBgmType='none'; bgmIntervals.forE
   if(ac&&_demoBus){ const b=_demoBus; b.gain.setTargetAtTime(0,ac.currentTime,.03); setTimeout(()=>{ try{b.disconnect();}catch(e){} },400); _demoBus=null; }
   if(jBus&&ac){ jBus.gain.setTargetAtTime(0,ac.currentTime,.04); jBus=null; } }   // 途中のジングルもすばやく消す
 let bgmVerb=null;
-function getBgmVerb(){ if(bgmVerb||!ac)return bgmVerb; const d=ac.createDelay(2),fb=ac.createGain(),lp=ac.createBiquadFilter(),out=ac.createGain();
+function getBgmVerb(){ _persist++; try{ return getBgmVerb0(); } finally { _persist--; } }
+function getBgmVerb0(){ if(bgmVerb||!ac)return bgmVerb; const d=ac.createDelay(2),fb=ac.createGain(),lp=ac.createBiquadFilter(),out=ac.createGain();
   d.delayTime.value=.38; fb.gain.value=.42; lp.type='lowpass'; lp.frequency.value=1500; out.gain.value=.6;
   d.connect(lp); lp.connect(fb); fb.connect(d); lp.connect(out); out.connect(bgmGain); bgmVerb=d; return d; }
 // 1音：f=周波数, d=長さ, when=鳴らす時刻, cut=ローパス, atk/rel=立ち上がり/余韻, wet=残響量, f2=音程の移動先
@@ -549,17 +577,18 @@ function preMode(){ return !!_OAC&&(LQ||_preForce); }
 function renderChunk(q){ const t0=q.next, sr=ac.sampleRate, CH=PRE_CH; let off;   // 録音の手間は「区切りの長さ×音の数」で増えるので、2秒ずつ小刻みに録るのが一番軽い
   // 録音はモノラル・24kHz（曲は左右の広がりがなく、ノイズも10kHz以下にしてあるので音は同じ）。メモリと処理を約1/4に減らす
   try{ off=new _OAC(1,Math.ceil(PRE_SR*(CH+PRE_TAIL)),PRE_SR); }catch(e){ try{ off=new _OAC(1,Math.ceil(sr*(CH+PRE_TAIL)),sr); }catch(e2){ q.noPre=true; return; } }
-  const sv=[ac,bgmGain,bgmOut,bgmVerb], out=off.createGain(); out.connect(off.destination);
+  off.__list=[]; const sv=[ac,bgmGain,bgmOut,bgmVerb], out=persistNode(off.createGain()); out.connect(off.destination);
   ac=off; bgmGain=out; bgmOut=out; bgmVerb=null;
   try{ const end=t0+CH; while(q.next<end){ q.fn(q.step,q.next-t0,q.stepT); q.next+=q.stepT; q.step++; } }
   catch(e){ console.error(e); } finally { [ac,bgmGain,bgmOut,bgmVerb]=sv; }
   q.busy=true;
-  const done=buf=>{ q.busy=false; if(q.dead||!buf)return; const src=ac.createBufferSource(); src.buffer=buf; src.connect(q.bus); src.onended=()=>{ try{src.disconnect();}catch(e){} };
+  const done=buf=>{ const L=off.__list; off.__list=null; if(L) for(const n of L){ try{n.disconnect();}catch(e){} }   // 録音が済んだ部品はすべて切り離す
+    q.busy=false; if(q.dead||!buf)return; const src=ac.createBufferSource(); src.buffer=buf; src.connect(q.bus); src.onended=()=>{ try{src.disconnect();}catch(e){} };
     const now=ac.currentTime; if(t0>=now) src.start(t0); else if(now-t0<CH) src.start(now,now-t0); };
   try{ const pr=off.startRendering(); if(pr&&pr.then) pr.then(done,()=>{ q.busy=false; q.noPre=true; }); else off.oncomplete=e=>done(e.renderedBuffer); }
   catch(e){ q.busy=false; q.noPre=true; } }
 function runSeq(bpm,fn,delay=0){ const q={fn,stepT:60/bpm/4,next:ac.currentTime+.08+delay,step:0,busy:false,dead:false,noPre:false}; q.liveUntil=q.next+2.5;   // 曲の出だし2.5秒はまとめて直接予約して鳴らす（その間に続きを録音するので、録音待ちで遅れない）
-  const bus=ac.createGain(); bus.connect(bgmGain); bgmBuses.push(bus); q.bus=bus; bgmSeqs.push(q);
+  const bus=persistNode(ac.createGain()); bus.connect(bgmGain); bgmBuses.push(bus); q.bus=bus; bgmSeqs.push(q);
   const tick=()=>{ if(!isBgmPlaying||q.dead)return;
     const pre=preMode()&&!q.noPre;
     if(pre&&q.next>=q.liveUntil){   // 録音方式
@@ -603,7 +632,7 @@ function startTitleBGM(){ initAudio(); if(isBgmPlaying&&currentBgmType==='title'
     isBgmPlaying = true;
     currentBgmType = 'demo';
     // 前作の曲は音が大きいので、専用の音量つまみ（BGMスライダーの手前）で他の曲と同程度に下げる
-    const demoBus = ac.createGain(); demoBus.gain.value = 0.2; demoBus.connect(bgmGain); _demoBus = demoBus;
+    const demoBus = persistNode(ac.createGain()); demoBus.gain.value = 0.2; demoBus.connect(bgmGain); _demoBus = demoBus;
     
     const BPM = 180;
     const beatMs = 60000 / BPM;
@@ -1203,7 +1232,7 @@ function startBoss2BGM(){ initAudio(); if(demo)return; if(isBgmPlaying&&currentB
 // ================= 工程5：ジングル・場面の曲（すべて緊迫感のある音） =================
 // jingle(type, fn)：1回だけ鳴る音をまとめて予約する。stopBGM() が呼ばれるとすぐに消える
 function jingle(type,fn){ initAudio(); if(demo)return; stopBGM(); isBgmPlaying=true; currentBgmType=type;
-  jBus=ac.createGain(); jBus.connect(bgmGain); bgmOut=jBus; try{ fn(ac.currentTime+.05); } finally { bgmOut=null; } }
+  jBus=persistNode(ac.createGain()); jBus.connect(bgmGain); bgmOut=jBus; try{ fn(ac.currentTime+.05); } finally { bgmOut=null; } }
 const chord=(ns,d,w,o)=>ns.forEach((n,i)=>bv(hz(n),d,w,Object.assign({det:i%2?8:-8},o)));
 
 // ---- ステージクリア（約3秒）：半音でぶつかる短調の強打のあと、解決しきらない5度の和音を震わせて残す ----
@@ -4230,9 +4259,9 @@ $('endBtn').onclick=e=>{ e.stopPropagation(); endGame(); };
 // ---------------- 一時停止 ----------------
 let pausedFrom=null;
 function pauseGame(){ if(!['play','boss','warp'].includes(state)||demo)return; pausedFrom=state; state='pause'; touch.active=false;
-  for(const k in keys)keys[k]=false; if(ac&&ac.state==='running')ac.suspend(); $('pauseMenu').classList.remove('hidden'); $('volPanel').classList.add('hidden'); updFullBtn(); }
-function resumeGame(){ if(state!=='pause')return; state=pausedFrom; pausedFrom=null; if(ac)ac.resume(); $('pauseMenu').classList.add('hidden'); }
-function quitToTitle(){ if(state!=='pause')return; $('pauseMenu').classList.add('hidden'); if(ac)ac.resume(); stopBGM(); boss=null; warp=null; state='over';
+  for(const k in keys)keys[k]=false; muteAll(true); $('pauseMenu').classList.remove('hidden'); $('volPanel').classList.add('hidden'); updFullBtn(); }
+function resumeGame(){ if(state!=='pause')return; state=pausedFrom; pausedFrom=null; muteAll(false); $('pauseMenu').classList.add('hidden'); }
+function quitToTitle(){ if(state!=='pause')return; $('pauseMenu').classList.add('hidden'); muteAll(false); stopBGM(); boss=null; warp=null; state='over';
   showScreen(TITLE_HTML,'PC：矢印キー／WASDで移動、スペースで発射、Z／X／Cでフォーメーション<br>スマホ：画面をドラッグで移動（押している間は自動連射）','NEW GAME'); saveScore(); }
 $('pauseBtn').onclick=e=>{ e.stopPropagation(); pauseGame(); };
 $('pauseBtn').addEventListener('touchstart',e=>e.stopPropagation(),{passive:true});
