@@ -485,8 +485,10 @@ const sfx={
 // ---------------- BGM（工程2：シリアス版。タイトル／ゲーム／ボス） ----------------
 // すべて bgmGain 経由なのでBGMスライダー/OFFが効く。発音は先読みスケジューラで正確なタイミングに
 let isBgmPlaying=false, currentBgmType='none', bgmIntervals=[];
-let bgmOut=null, jBus=null;   // bgmOut：一時的な出力先（ジングル用）。jBus：鳴っているジングルのまとめ役
-function stopBGM(){ isBgmPlaying=false; currentBgmType='none'; bgmIntervals.forEach(i=>clearInterval(i)); bgmIntervals=[];
+let bgmOut=null, jBus=null, _demoBus=null;   // bgmOut：一時的な出力先（ジングル用）。jBus：鳴っているジングルのまとめ役
+function stopBGM(){ isBgmPlaying=false; currentBgmType='none'; bgmIntervals.forEach(i=>clearInterval(i)); bgmIntervals=[]; bgmPumps=[];
+  if(ac){ const now=ac.currentTime; bgmBuses.forEach(b=>{ b.gain.setTargetAtTime(0,now,.03); setTimeout(()=>{ try{b.disconnect();}catch(e){} },400); }); } bgmBuses=[];
+  if(ac&&_demoBus){ const b=_demoBus; b.gain.setTargetAtTime(0,ac.currentTime,.03); setTimeout(()=>{ try{b.disconnect();}catch(e){} },400); _demoBus=null; }
   if(jBus&&ac){ jBus.gain.setTargetAtTime(0,ac.currentTime,.04); jBus=null; } }   // 途中のジングルもすばやく消す
 let bgmVerb=null;
 function getBgmVerb(){ if(bgmVerb||!ac)return bgmVerb; const d=ac.createDelay(2),fb=ac.createGain(),lp=ac.createBiquadFilter(),out=ac.createGain();
@@ -516,12 +518,26 @@ const bTom=(w,f=90,v=.14)=>{ bv(f,.25,w,{type:'triangle',v,f2:f*.6,cut:600,atk:.
 const bHat=(w,v=.02)=>bn(.04,w,{v:Math.min(v*.85,.02),f1:6000});   // アクセントの音量を抑える
 const bSnare=(w,v=.08)=>{ bn(.2,w,{v,f1:1800,f2:400,ft:'bandpass',q:.7}); bv(180,.12,w,{type:'triangle',v:v*.8,f2:120,cut:900,atk:.002}); };
 // 先読みスケジューラ：1ステップ(16分音符)ごとに fn(step, 時刻) を呼ぶ
+// 軽量化：先読みを0.8秒に延ばし、タイマーに加えて画面の更新（毎フレーム）からも予約を進める。
+// 曲ごとに専用の音量バスを通し、曲を止めたときは先読み済みの音もすばやく消す。
+const BGM_AHEAD=.8; let bgmPumps=[], bgmBuses=[];
+function pumpBGM(){ for(const f of bgmPumps) f(); }
 function runSeq(bpm,fn,delay=0){ const stepT=60/bpm/4; let next=ac.currentTime+.08+delay, step=0;
-  const id=setInterval(()=>{ if(!isBgmPlaying)return;
+  const bus=ac.createGain(); bus.connect(bgmGain); bgmBuses.push(bus);
+  const tick=()=>{ if(!isBgmPlaying)return;
     while(next<ac.currentTime){ next+=stepT; step++; }   // 処理が遅れて間に合わなかった音は鳴らさずに飛ばす（まとめて鳴って雑音になるのを防ぐ）
-    while(next<ac.currentTime+.3){   // 先読み0.3秒：画面処理が重くても音が欠けにくい
-      fn(step,next,stepT); next+=stepT; step++; } },25);
-  bgmIntervals.push(id); }
+    if(next>=ac.currentTime+BGM_AHEAD) return;
+    const o=bgmOut; bgmOut=bus;
+    try{ while(next<ac.currentTime+BGM_AHEAD){ fn(step,next,stepT); next+=stepT; step++; } } finally { bgmOut=o; } };
+  bgmPumps.push(tick); bgmIntervals.push(setInterval(tick,25)); }
+// 前作の曲（デモ用）も同じ先読み方式で鳴らす：本体の中の ac.currentTime を「予約する時刻」に置き換えて呼ぶ
+let _demoT=0;
+function demoSeq(fn,ms){ const d=ms/1000; let next=ac.currentTime+.1;
+  const tick=()=>{ if(!isBgmPlaying||currentBgmType!=='demo')return;
+    while(next<ac.currentTime) next+=d;
+    const o=bgmOut; bgmOut=null;
+    try{ while(next<ac.currentTime+BGM_AHEAD){ _demoT=next; fn(); next+=d; } } finally { bgmOut=o; } };
+  bgmPumps.push(tick); return setInterval(tick,25); }
 const hz=m=>m?440*Math.pow(2,(m-69)/12):0;   // MIDIノート番号→周波数
 
 // ---- タイトル：D短調・BPM76。暗い持続和音、静かな脈動、残響のある旋律 ----
@@ -546,7 +562,7 @@ function startTitleBGM(){ initAudio(); if(isBgmPlaying&&currentBgmType==='title'
     isBgmPlaying = true;
     currentBgmType = 'demo';
     // 前作の曲は音が大きいので、専用の音量つまみ（BGMスライダーの手前）で他の曲と同程度に下げる
-    const demoBus = ac.createGain(); demoBus.gain.value = 0.2; demoBus.connect(bgmGain);
+    const demoBus = ac.createGain(); demoBus.gain.value = 0.2; demoBus.connect(bgmGain); _demoBus = demoBus;
     
     const BPM = 180;
     const beatMs = 60000 / BPM;
@@ -596,7 +612,7 @@ function startTitleBGM(){ initAudio(); if(isBgmPlaying&&currentBgmType==='title'
     let drumIdx = 0;
     
     // パッド
-    const padInterval = setInterval(() => {
+    const padInterval = demoSeq(() => {
       if (!isBgmPlaying || currentBgmType !== 'demo') return;
       const chord = chordProgressions[chordIdx % chordProgressions.length];
       chord.forEach((freq) => {
@@ -607,23 +623,23 @@ function startTitleBGM(){ initAudio(); if(isBgmPlaying&&currentBgmType==='title'
         osc2.type = 'square';
         osc1.frequency.value = freq;
         osc2.frequency.value = freq * 2;
-        gain.gain.setValueAtTime(0, ac.currentTime);
-        gain.gain.linearRampToValueAtTime(0.05, ac.currentTime + 0.05);
-        gain.gain.setValueAtTime(0.05, ac.currentTime + beatMs * 4 / 1000 - 0.05);
-        gain.gain.linearRampToValueAtTime(0, ac.currentTime + beatMs * 4 / 1000);
+        gain.gain.setValueAtTime(0, _demoT);
+        gain.gain.linearRampToValueAtTime(0.05, _demoT + 0.05);
+        gain.gain.setValueAtTime(0.05, _demoT + beatMs * 4 / 1000 - 0.05);
+        gain.gain.linearRampToValueAtTime(0, _demoT + beatMs * 4 / 1000);
         osc1.connect(gain);
         osc2.connect(gain);
         gain.connect(demoBus);
-        osc1.start(ac.currentTime);
-        osc2.start(ac.currentTime);
-        osc1.stop(ac.currentTime + beatMs * 4 / 1000);
-        osc2.stop(ac.currentTime + beatMs * 4 / 1000);
+        osc1.start(_demoT);
+        osc2.start(_demoT);
+        osc1.stop(_demoT + beatMs * 4 / 1000);
+        osc2.stop(_demoT + beatMs * 4 / 1000);
       });
       chordIdx++;
     }, beatMs * 4);
     
     // メロディ
-    const melodyInterval = setInterval(() => {
+    const melodyInterval = demoSeq(() => {
       if (!isBgmPlaying || currentBgmType !== 'demo') return;
       const freq = melodyPattern[melodyIdx % melodyPattern.length];
       if (freq > 0) {
@@ -634,38 +650,38 @@ function startTitleBGM(){ initAudio(); if(isBgmPlaying&&currentBgmType==='title'
         osc2.type = 'square';
         osc1.frequency.value = freq;
         osc2.frequency.value = freq * 1.005;
-        gain.gain.setValueAtTime(0.13, ac.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, ac.currentTime + sixteenthMs / 1000 * 0.9);
+        gain.gain.setValueAtTime(0.13, _demoT);
+        gain.gain.exponentialRampToValueAtTime(0.01, _demoT + sixteenthMs / 1000 * 0.9);
         osc1.connect(gain);
         osc2.connect(gain);
         gain.connect(demoBus);
-        osc1.start(ac.currentTime);
-        osc2.start(ac.currentTime);
-        osc1.stop(ac.currentTime + sixteenthMs / 1000);
-        osc2.stop(ac.currentTime + sixteenthMs / 1000);
+        osc1.start(_demoT);
+        osc2.start(_demoT);
+        osc1.stop(_demoT + sixteenthMs / 1000);
+        osc2.stop(_demoT + sixteenthMs / 1000);
       }
       melodyIdx++;
     }, sixteenthMs);
     
     // アルペジオ
-    const arpInterval = setInterval(() => {
+    const arpInterval = demoSeq(() => {
       if (!isBgmPlaying || currentBgmType !== 'demo') return;
       const freq = arpPattern[arpIdx % arpPattern.length];
       const osc = ac.createOscillator();
       const gain = ac.createGain();
       osc.type = 'sawtooth';
       osc.frequency.value = freq;
-      gain.gain.setValueAtTime(0.07, ac.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, ac.currentTime + sixteenthMs / 1000 * 0.7);
+      gain.gain.setValueAtTime(0.07, _demoT);
+      gain.gain.exponentialRampToValueAtTime(0.01, _demoT + sixteenthMs / 1000 * 0.7);
       osc.connect(gain);
       gain.connect(demoBus);
-      osc.start(ac.currentTime);
-      osc.stop(ac.currentTime + sixteenthMs / 1000 * 0.8);
+      osc.start(_demoT);
+      osc.stop(_demoT + sixteenthMs / 1000 * 0.8);
       arpIdx++;
     }, sixteenthMs);
     
     // ベース
-    const bassInterval = setInterval(() => {
+    const bassInterval = demoSeq(() => {
       if (!isBgmPlaying || currentBgmType !== 'demo') return;
       const freq = bassPattern[bassIdx % bassPattern.length];
       if (freq > 0) {
@@ -673,31 +689,31 @@ function startTitleBGM(){ initAudio(); if(isBgmPlaying&&currentBgmType==='title'
         const gain = ac.createGain();
         osc.type = 'sawtooth';
         osc.frequency.value = freq;
-        gain.gain.setValueAtTime(0.2, ac.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, ac.currentTime + sixteenthMs / 1000 * 0.8);
+        gain.gain.setValueAtTime(0.2, _demoT);
+        gain.gain.exponentialRampToValueAtTime(0.01, _demoT + sixteenthMs / 1000 * 0.8);
         osc.connect(gain);
         gain.connect(demoBus);
-        osc.start(ac.currentTime);
-        osc.stop(ac.currentTime + sixteenthMs / 1000);
+        osc.start(_demoT);
+        osc.stop(_demoT + sixteenthMs / 1000);
       }
       bassIdx++;
     }, sixteenthMs);
     
     // ドラム
-    const drumInterval = setInterval(() => {
+    const drumInterval = demoSeq(() => {
       if (!isBgmPlaying || currentBgmType !== 'demo') return;
       if (kickPattern[drumIdx % kickPattern.length]) {
         const osc = ac.createOscillator();
         const gain = ac.createGain();
         osc.type = 'sine';
-        osc.frequency.setValueAtTime(150, ac.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(40, ac.currentTime + 0.08);
-        gain.gain.setValueAtTime(0.35, ac.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.0005, ac.currentTime + 0.08);
+        osc.frequency.setValueAtTime(150, _demoT);
+        osc.frequency.exponentialRampToValueAtTime(40, _demoT + 0.08);
+        gain.gain.setValueAtTime(0.35, _demoT);
+        gain.gain.exponentialRampToValueAtTime(0.0005, _demoT + 0.08);
         osc.connect(gain);
         gain.connect(demoBus);
-        osc.start(ac.currentTime);
-        osc.stop(ac.currentTime + 0.08);
+        osc.start(_demoT);
+        osc.stop(_demoT + 0.08);
       }
       if (snarePattern[drumIdx % snarePattern.length]) {
         const buffer = NB(0.08);
@@ -707,12 +723,12 @@ function startTitleBGM(){ initAudio(); if(isBgmPlaying&&currentBgmType==='title'
         filter.type = 'highpass';
         filter.frequency.value = 1500;
         const gain = ac.createGain();
-        gain.gain.setValueAtTime(0.25, ac.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.0005, ac.currentTime + 0.08);
+        gain.gain.setValueAtTime(0.25, _demoT);
+        gain.gain.exponentialRampToValueAtTime(0.0005, _demoT + 0.08);
         noise.connect(filter);
         filter.connect(gain);
         gain.connect(demoBus);
-        noise.start(ac.currentTime);
+        noise.start(_demoT);
       }
       if (hihatPattern[drumIdx % hihatPattern.length]) {
         const buffer = NB(0.03);
@@ -722,13 +738,13 @@ function startTitleBGM(){ initAudio(); if(isBgmPlaying&&currentBgmType==='title'
         filter.type = 'highpass';
         filter.frequency.value = 6000;
         const gain = ac.createGain();
-        gain.gain.setValueAtTime(0.03, ac.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.0005, ac.currentTime + 0.03);
+        gain.gain.setValueAtTime(0.03, _demoT);
+        gain.gain.exponentialRampToValueAtTime(0.0005, _demoT + 0.03);
         const top = ac.createBiquadFilter(); top.type = 'lowpass'; top.frequency.value = NOISE_TOP;
         noise.connect(filter);
         filter.connect(top); top.connect(gain);
         gain.connect(demoBus);
-        noise.start(ac.currentTime);
+        noise.start(_demoT);
       }
       drumIdx++;
     }, sixteenthMs);
@@ -4115,6 +4131,7 @@ function loop(now){ requestAnimationFrame(loop);
   if(d>250) d=STEP_MS;                       // タブ切替などで長く止まった後は1回分として扱う
   _acc+=d; let n=Math.floor(_acc/STEP_MS); if(n<1) return;
   _acc-=n*STEP_MS; if(n>MAX_STEPS){ n=MAX_STEPS; _acc=0; }
+  if(isBgmPlaying) pumpBGM();
   for(let i=1;i<n;i++) tickOnly();
   perfWatch(n, now);
   { const on=['play','boss'].includes(state);   /* デモ中もフォーメーションボタンを表示 */ if(on!==formBarOn){ formBarOn=on; $('formBar').style.visibility=on?'':'hidden'; } }   // フォーメーションボタンはステージ中のみ表示
