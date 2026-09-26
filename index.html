@@ -139,6 +139,7 @@
   /* ショップ中：画面に出ている情報（SCORE・CREDIT・武器・装備）はHUDから外し、残機と一時停止だけ残す */
   body.inShop #hud>span:not(.keep){display:none}
   body.inShop #pauseBtn{margin-left:auto}
+  body.inExplain #hud{visibility:hidden}   /* ステージ開始前の解説画面ではHUDを出さない */
   #test{position:absolute;left:12px;bottom:62px;display:flex;gap:6px;align-items:center;font-size:13px;color:var(--dim);flex-wrap:wrap}
   /* デバッグパネルの表示／非表示：隠している間は切替ボタンだけを、右側（ショップのCREDITと機体の枠の間のすき間）に小さく残す */
   #test #dbgTog{margin-left:auto;border-color:#ffd23e;color:#ffd23e}
@@ -4003,9 +4004,10 @@ function update(){
 }
 // オプションのフォーメーション：SPREAD／FOCUS／FREEZE
 let formation='spread';
-const A20=Math.PI/9, FZ_HOLD=300, FZ_WAIT=300;   // 設置5秒・再使用まで5秒
+const A20=Math.PI/9, FZ_HOLD=300, FZ_WAIT=600;   // 設置5秒・戻ってから再使用まで10秒
 const SPREAD_SLOTS=[{dx:2,dy:-38,ang:-A20},{dx:2,dy:38,ang:A20},{dx:-52,dy:0,ang:Math.PI},{dx:58,dy:0,ang:0,sway:1}];
 const FOCUS_DY={1:['sway'],2:[-30,30],3:[-30,30,'sway'],4:[-30,30,-60,60]};
+const FZ_GAP=24;   // FREEZE中のオプションの縦の間隔
 let fz=[], fzS={active:false,until:0,cdEnd:0};
 const SWAY=()=>12*Math.sin(t*.07);   // 上下の揺れ（往復約1.5秒）
 function spreadSlot(i){ const sl=SPREAD_SLOTS[i]; return sl.sway?{dx:sl.dx,dy:SWAY(),ang:0}:sl; }
@@ -4018,8 +4020,8 @@ function endFreeze(){ if(!fzS.active)return; fz=[]; fzS.active=false; fzS.cdEnd=
 // FREEZE：押した瞬間、自機の前方に縦一列（FOCUSの形）でまとめて設置。5秒後に戻り、5秒待つと再び使える
 function triggerFreeze(){
   if(fzS.active||t<fzS.cdEnd||optionCount<1||player.dead)return;
-  const dys=FOCUS_DY[Math.min(4,optionCount)]; fz=[];
-  for(let i=0;i<optionCount;i++) fz[i]={x:clamp(player.x+(dys[i]==='sway'?60:50)*PS,30,W-30),y:clamp(player.y+(dys[i]==='sway'?0:dys[i])*PS,20,H-20)};
+  const n=Math.min(4,optionCount); fz=[];   // 個数に関係なく、自機の高さを中心に等間隔（FZ_GAP）で縦一列
+  for(let i=0;i<n;i++) fz[i]={x:clamp(player.x+50*PS,30,W-30),y:clamp(player.y+(i-(n-1)/2)*FZ_GAP,20,H-20)};
   fzS.active=true; fzS.until=t+FZ_HOLD; sfx.bounce();
 }
 function updateFreeze(){
@@ -4055,9 +4057,9 @@ function fzShield(){ const w=fzWall(); if(fzFx.length)fzFx=fzFx.filter(f=>++f.f<
 function fzHex(path,cx,cy,r){ for(let i=0;i<6;i++){ const a=i*Math.PI/3+Math.PI/6, x=cx+Math.cos(a)*r, y=cy+Math.sin(a)*r; i?path.lineTo(x,y):path.moveTo(x,y); } path.closePath(); }
 function drawFzShield(){ const w=fzWall(); if(w){ const k=clamp((fzS.until-t)/40,0,1), a=(.22+.08*Math.sin(t*.12))*(.4+.6*k);   // 残り時間が少ないと薄くなる
     ctx.save(); ctx.fillStyle=`rgba(62,242,208,${a*.35})`; ctx.fillRect(w.x-FZ_HALF,w.y0,FZ_HALF*2,w.y1-w.y0);
-    ctx.beginPath(); for(let y=w.y0+7,r=0;y<w.y1-3;y+=12,r++) for(let c=-1;c<=1;c++) fzHex(ctx,w.x+c*10.4,y+(c?6:0),6.5);   // 六角格子は1本の線にまとめて1回で描く
-    ctx.strokeStyle=`rgba(62,242,208,${a*2})`; ctx.lineWidth=1; ctx.stroke();
-    ctx.strokeStyle=`rgba(190,255,245,${a*2.6})`; ctx.lineWidth=1.5; ctx.beginPath(); ctx.moveTo(w.x-FZ_HALF,w.y0); ctx.lineTo(w.x-FZ_HALF,w.y1); ctx.moveTo(w.x+FZ_HALF,w.y0); ctx.lineTo(w.x+FZ_HALF,w.y1); ctx.stroke(); ctx.restore(); }
+    ctx.beginPath(); let yl=0; for(let y=w.y0+7;y<w.y1-3;y+=12){ yl=y; for(let c=-1;c<=1;c++) fzHex(ctx,w.x+c*10.4,y+(c?6:0),6.5); }   // 六角格子は1本の線にまとめて1回で描く
+    fzHex(ctx,w.x,yl+12,6.5);   // 下端の中央：左右の列が半マス下に出ている分を埋める
+    ctx.strokeStyle=`rgba(62,242,208,${a*2})`; ctx.lineWidth=1; ctx.stroke(); ctx.restore(); }
   if(fzFx.length){ ctx.save(); ctx.lineWidth=2; for(const f of fzFx){ const q=f.f/22; ctx.strokeStyle=`rgba(62,242,208,${1-q})`; ctx.beginPath(); fzHex(ctx,f.x,f.y,6+q*24); fzHex(ctx,f.x,f.y,3+q*12); ctx.stroke(); } ctx.restore(); } }
 // 出現の重み：Nカプセル（ノーマルに戻す）は他の武器の半分の頻度。他の比率は以前と同じ
 const ITEM_TYPES=['A','A','O','O','O','O','S','S','D','D','T','T','W','W','L','L','F','F','R','R','N'];
@@ -4554,7 +4556,7 @@ function tickOnly(){   // 描画なしで1回分だけ進める
   else if(state==='opening'&&op) updateOpening();
   else if(state==='ending'&&en) updateEnding();
   else if(state==='special'&&sp) updateSpecial(); }
-let inShopOn=false;
+let inShopOn=false, inExplainOn=false;
 function loop(now){ requestAnimationFrame(loop);
   now=now||performance.now(); let d=_lastT?now-_lastT:STEP_MS; _lastT=now;
   if(d>250) d=STEP_MS;                       // タブ切替などで長く止まった後は1回分として扱う
@@ -4564,6 +4566,7 @@ function loop(now){ requestAnimationFrame(loop);
   for(let i=1;i<n;i++) tickOnly();
   perfWatch(n, now); updBombBtn();
   { const sh=state==='warp'&&!!(warp&&warp.shop); if(sh!==inShopOn){ inShopOn=sh; document.body.classList.toggle('inShop',sh); } }
+  { const ex=state==='warp'&&!!(warp&&warp.phase===3); if(ex!==inExplainOn){ inExplainOn=ex; document.body.classList.toggle('inExplain',ex); } }
   { const on=['play','boss'].includes(state);   /* デモ中もフォーメーションボタンを表示 */ if(on!==formBarOn){ formBarOn=on; $('formBar').style.visibility=on?'':'hidden'; } }   // フォーメーションボタンはステージ中のみ表示
   if(state==='title'){ drawTitle(); if(document.body.classList.contains('started')&&!nameOpen&&++idleTimer>=DEMO_DELAY)startDemo(); } else if(state==='play'||state==='boss'||state==='clear'){ update(); draw(); } else if(state==='warp'){ updateWarp(); if(warp)drawWarp(); else draw(); } else if(state==='opening'&&op){ updateOpening(); drawOpening(); } else if(state==='ending'&&en){ updateEnding(); drawEnding(); } else if(state==='special'&&sp){ updateSpecial(); drawSpecial(); } }
 // ---- 軽量化：重い端末だけ内部解像度を下げる（見た目の配置・大きさは同じ） ----
