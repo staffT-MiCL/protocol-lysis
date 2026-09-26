@@ -82,7 +82,6 @@
   .cbtn.danger.armed{background:#ff3d7f;color:#fff}
   #volPanel .sep{height:1px;background:rgba(62,242,208,.3);margin:10px 0}
   #volPanel.ingame .cfgOnly{display:none}
-  #cfgNote{font-size:11px;color:var(--dim);margin:4px 0 0}
   #contBox{margin-top:14px}
   #resumeBox{margin-bottom:12px}
   #resumeBox:empty{display:none}
@@ -212,11 +211,12 @@
     <div class="vrow"><label>BGM</label><input type="range" id="bgmVol" min="0" max="100" value="100"><span class="val" id="bgmVal">100%</span><button class="off" id="bgmOff">OFF</button></div>
     <div class="vrow"><label>SE</label><input type="range" id="seVol" min="0" max="100" value="30"><span class="val" id="seVal">30%</span><button class="off" id="seOff">OFF</button></div>
     <p id="volHint">※画面タップで弾を発射（SE確認）</p>
+    <div class="sep"></div>
+    <div class="crow"><label>画質</label><div class="seg" id="gfxSeg"><button data-g="auto">AUTO</button><button data-g="hi">通常</button><button data-g="lo">軽量</button></div></div>
     <div class="cfgOnly">
       <div class="sep"></div>
       <div class="crow"><label>難易度</label><div class="seg" id="diffSeg"><button data-d="EASY">EASY</button><button data-d="NORMAL">NORMAL</button><button data-d="HARD">HARD</button></div></div>
       <div class="crow"><label>残機数</label><select id="livesSel"></select></div>
-      <p id="cfgNote"></p>
       <div class="sep"></div>
       <div class="crow"><button class="cbtn danger" id="clearBtn">記録を削除</button></div>
     </div>
@@ -486,7 +486,7 @@ const sfx={
 // すべて bgmGain 経由なのでBGMスライダー/OFFが効く。発音は先読みスケジューラで正確なタイミングに
 let isBgmPlaying=false, currentBgmType='none', bgmIntervals=[];
 let bgmOut=null, jBus=null, _demoBus=null;   // bgmOut：一時的な出力先（ジングル用）。jBus：鳴っているジングルのまとめ役
-function stopBGM(){ isBgmPlaying=false; currentBgmType='none'; bgmIntervals.forEach(i=>clearInterval(i)); bgmIntervals=[]; bgmPumps=[];
+function stopBGM(){ isBgmPlaying=false; currentBgmType='none'; bgmIntervals.forEach(i=>clearInterval(i)); bgmIntervals=[]; bgmPumps=[]; bgmSeqs.forEach(q=>q.dead=true); bgmSeqs=[];
   if(ac){ const now=ac.currentTime; bgmBuses.forEach(b=>{ b.gain.setTargetAtTime(0,now,.03); setTimeout(()=>{ try{b.disconnect();}catch(e){} },400); }); } bgmBuses=[];
   if(ac&&_demoBus){ const b=_demoBus; b.gain.setTargetAtTime(0,ac.currentTime,.03); setTimeout(()=>{ try{b.disconnect();}catch(e){} },400); _demoBus=null; }
   if(jBus&&ac){ jBus.gain.setTargetAtTime(0,ac.currentTime,.04); jBus=null; } }   // 途中のジングルもすばやく消す
@@ -522,13 +522,35 @@ const bSnare=(w,v=.08)=>{ bn(.2,w,{v,f1:1800,f2:400,ft:'bandpass',q:.7}); bv(180
 // 曲ごとに専用の音量バスを通し、曲を止めたときは先読み済みの音もすばやく消す。
 const BGM_AHEAD=.8; let bgmPumps=[], bgmBuses=[];
 function pumpBGM(){ for(const f of bgmPumps) f(); }
-function runSeq(bpm,fn,delay=0){ const stepT=60/bpm/4; let next=ac.currentTime+.08+delay, step=0;
-  const bus=ac.createGain(); bus.connect(bgmGain); bgmBuses.push(bus);
-  const tick=()=>{ if(!isBgmPlaying)return;
-    while(next<ac.currentTime){ next+=stepT; step++; }   // 処理が遅れて間に合わなかった音は鳴らさずに飛ばす（まとめて鳴って雑音になるのを防ぐ）
-    if(next>=ac.currentTime+BGM_AHEAD) return;
+// 重い端末（軽量モード）では、曲を6秒ずつ「前もって録音」してから流す。
+// 録音は裏で行い、再生中は録音済みの音を1本流すだけなので、画面の処理が重くても音が遅れたり途切れたりしない。
+// 曲の中身は同じ（同じ関数で同じ音を作る）。6秒の区切りをまたぐ音の余韻は、各区切りに4秒ぶん余分に録って重ねるので切れない。
+const PRE_CH=6, PRE_TAIL=4, _OAC=window.OfflineAudioContext||window.webkitOfflineAudioContext;
+const _preForce=new URLSearchParams(location.search).get('bgm')==='pre';
+let bgmSeqs=[];
+function preMode(){ return !!_OAC&&(LQ||_preForce); }
+function renderChunk(q){ const t0=q.next, sr=ac.sampleRate; let off;
+  try{ off=new _OAC(2,Math.ceil(sr*(PRE_CH+PRE_TAIL)),sr); }catch(e){ q.noPre=true; return; }
+  const sv=[ac,bgmGain,bgmOut,bgmVerb], out=off.createGain(); out.connect(off.destination);
+  ac=off; bgmGain=out; bgmOut=out; bgmVerb=null;
+  try{ const end=t0+PRE_CH; while(q.next<end){ q.fn(q.step,q.next-t0,q.stepT); q.next+=q.stepT; q.step++; } }
+  catch(e){ console.error(e); } finally { [ac,bgmGain,bgmOut,bgmVerb]=sv; }
+  q.busy=true;
+  const done=buf=>{ q.busy=false; if(q.dead||!buf)return; const src=ac.createBufferSource(); src.buffer=buf; src.connect(q.bus);
+    const now=ac.currentTime; if(t0>=now) src.start(t0); else if(now-t0<PRE_CH) src.start(now,now-t0); };
+  try{ const pr=off.startRendering(); if(pr&&pr.then) pr.then(done,()=>{ q.busy=false; q.noPre=true; }); else off.oncomplete=e=>done(e.renderedBuffer); }
+  catch(e){ q.busy=false; q.noPre=true; } }
+function runSeq(bpm,fn,delay=0){ const q={fn,stepT:60/bpm/4,next:ac.currentTime+.08+delay,step:0,busy:false,dead:false,noPre:false};
+  const bus=ac.createGain(); bus.connect(bgmGain); bgmBuses.push(bus); q.bus=bus; bgmSeqs.push(q);
+  const tick=()=>{ if(!isBgmPlaying||q.dead)return;
+    if(preMode()&&!q.noPre){   // 録音方式
+      if(q.busy||q.next>=ac.currentTime+PRE_CH+1.5) return;
+      while(q.next<ac.currentTime+.05){ q.next+=q.stepT; q.step++; }   // 遅れた分は飛ばして拍を合わせる
+      renderChunk(q); return; }
+    while(q.next<ac.currentTime){ q.next+=q.stepT; q.step++; }   // 処理が遅れて間に合わなかった音は鳴らさずに飛ばす（まとめて鳴って雑音になるのを防ぐ）
+    if(q.next>=ac.currentTime+BGM_AHEAD) return;
     const o=bgmOut; bgmOut=bus;
-    try{ while(next<ac.currentTime+BGM_AHEAD){ fn(step,next,stepT); next+=stepT; step++; } } finally { bgmOut=o; } };
+    try{ while(q.next<ac.currentTime+BGM_AHEAD){ fn(q.step,q.next,q.stepT); q.next+=q.stepT; q.step++; } } finally { bgmOut=o; } };
   bgmPumps.push(tick); bgmIntervals.push(setInterval(tick,25)); }
 // 前作の曲（デモ用）も同じ先読み方式で鳴らす：本体の中の ac.currentTime を「予約する時刻」に置き換えて呼ぶ
 let _demoT=0;
@@ -4146,17 +4168,32 @@ function setLQ(){ if(LQ)return; LQ=true; try{ Object.defineProperty(ctx,'shadowB
 const _q=new URLSearchParams(location.search), _resFix=parseFloat(_q.get('res'));
 function setRes(k){ RS=k; cv.width=Math.round(W*k); cv.height=Math.round(H*k); ctx.setTransform(k,0,0,k,0,0); }
 const _pw={frames:0,steps:0,warm:0,level:0,done:!!_resFix,fpsN:0,fpsT:0,el:null};
-if(_resFix>0&&_resFix<1){ setRes(_resFix); setLQ(); }
-if(_q.get('fps')==='1'){ const e=document.createElement('div'); e.style.cssText='position:fixed;top:4px;right:6px;z-index:9999;font:12px monospace;color:#3ef2d0;background:rgba(0,0,0,.55);padding:2px 6px;pointer-events:none'; document.body.appendChild(e); _pw.el=e; }
+// 一度「重い端末」と判定したら端末に記録し、次回は起動直後（タイトル曲から）軽量モードで始める。
+// コンフィグの「画質」：AUTO（自動判定）／通常（常に高画質）／軽量（常に一番軽い設定）。URLの ?res=… は確認用として優先
+const LQ_KEY='vader2_lq', GFX_KEY='vader2_gfx';
+let gfxMode='auto'; try{ gfxMode=localStorage.getItem(GFX_KEY)||'auto'; }catch(e){}
+function unsetLQ(){ if(!LQ)return; LQ=false; try{ delete ctx.shadowBlur; }catch(e){} }
+function applyGfx(m){ gfxMode=m; _pw.frames=_pw.steps=_pw.warm=0;
+  if(m==='hi'){ unsetLQ(); setRes(1); _pw.done=true; }
+  else if(m==='lo'){ setRes(.6); setLQ(); _pw.done=true; }
+  else { let lv=0; try{ lv=+localStorage.getItem(LQ_KEY)||0; }catch(e){}
+    _pw.level=lv; if(lv>0){ setRes(lv>=2?.6:.75); setLQ(); } else { unsetLQ(); setRes(1); } _pw.done=lv>=2; }
+  document.querySelectorAll('#gfxSeg button').forEach(b=>b.classList.toggle('on',b.dataset.g===m)); }
+document.querySelectorAll('#gfxSeg button').forEach(b=>b.onclick=e=>{ e.stopPropagation(); const m=b.dataset.g;
+  if(m==='auto'&&gfxMode!=='auto'){ try{ localStorage.removeItem(LQ_KEY); }catch(e){} }   // AUTOを選び直したら判定をやり直す
+  try{ localStorage.setItem(GFX_KEY,m); }catch(e){} applyGfx(m); });
+if(_resFix>0){ if(_resFix>=1){ unsetLQ(); setRes(1); } else { setRes(_resFix); setLQ(); } }
+else applyGfx(gfxMode);
 function perfWatch(n, now){
   if(_pw.el){ _pw.fpsN++; if(now-_pw.fpsT>=1000){ _pw.el.textContent=Math.round(_pw.fpsN*1000/(now-_pw.fpsT))+' fps / 画質 '+(RS===1?'高':RS>.7?'軽量1':'軽量2'); _pw.fpsN=0; _pw.fpsT=now; } }
   if(_pw.done) return;
   if(!(state==='play'||state==='boss')){ _pw.warm=0; _pw.frames=_pw.steps=0; return; }
-  if(++_pw.warm<90) return;                  // ステージ開始直後の読み込みの揺れは数えない
+  if((_pw.warm+=n)<90) return;               // ステージ開始直後（約1.5秒）の読み込みの揺れは数えない
   _pw.frames++; _pw.steps+=n;
-  if(_pw.frames>=180){                       // 約3秒ぶんで判定
+  if(_pw.steps>=180){                        // ゲーム時間で約3秒ぶんで判定（遅い端末ほど早く判定できる）
     if(_pw.steps/_pw.frames>1.25){             // まだ重い → 1段階ずつ軽くする
-      _pw.level++; if(_pw.level===1){ setRes(.75); setLQ(); } else { setRes(.6); _pw.done=true; } }
+      _pw.level++; if(_pw.level===1){ setRes(.75); setLQ(); } else { setRes(.6); _pw.done=true; }
+      try{ localStorage.setItem(LQ_KEY,String(_pw.level)); }catch(e){} }
                                                // 軽くならない限り、重いステージに備えて監視を続ける
     _pw.frames=_pw.steps=0; } }
 function gameOver(){
@@ -4774,7 +4811,7 @@ function toggleVolPanel(e){ if(e)e.stopPropagation(); const pn=$('volPanel'); pn
 (function(){ const sel=$('livesSel'); for(let i=1;i<=99;i++){ const o=document.createElement('option'); o.value=i; o.textContent=i; sel.appendChild(o); }
   const o=document.createElement('option'); o.value=0; o.textContent='∞'; sel.appendChild(o); })();
 function syncCfg(){ document.querySelectorAll('#diffSeg button').forEach(b=>b.classList.toggle('on',b.dataset.d===cfg.diff)); $('livesSel').value=cfg.lives;
-  $('cfgNote').textContent='撃破スコア ×'+DIFF[cfg.diff].pts+'（EASY ×0.5／NORMAL ×1／HARD ×1.5）'; saveCfg(); }
+  saveCfg(); }
 document.querySelectorAll('#diffSeg button').forEach(b=>b.onclick=e=>{ e.stopPropagation(); cfg.diff=b.dataset.d; syncCfg(); });
 $('livesSel').addEventListener('change',e=>{ cfg.lives=+e.target.value; syncCfg(); });
 let clearArmed=null;
