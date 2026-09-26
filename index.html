@@ -286,8 +286,25 @@ let shotCount=0;
 function shoot(x,y,sp){ if(cfg.diff==='EASY'&&(++shotCount%3===0))return; fan([0]).forEach(s=>aim(x,y,sp,s)); }
 // ノイズ用の音データ：長さごとに1回だけ作って使い回す（毎回作ると処理が重くなり、音が途切れてプチプチ鳴る原因になる）
 const nbCache=new Map();
-function NB(d){ const n=Math.max(1,Math.round(ac.sampleRate*d)); let b=nbCache.get(n); if(b)return b;
-  b=ac.createBuffer(1,n,ac.sampleRate); const a=b.getChannelData(0); for(let i=0;i<n;i++)a[i]=Math.random()*2-1; if(nbCache.size<80)nbCache.set(n,b); return b; }
+function NB(d){ const n=Math.max(1,Math.round(ac.sampleRate*d)), key=n+'@'+ac.sampleRate; let b=nbCache.get(key); if(b)return b;
+  b=ac.createBuffer(1,n,ac.sampleRate); const a=b.getChannelData(0); for(let i=0;i<n;i++)a[i]=Math.random()*2-1; if(nbCache.size<80)nbCache.set(key,b); return b; }
+// ---- 音が止まったときの復旧 ----
+// iPadなどでは、負荷や通知・画面ロックで音声の仕組みが止まることがある。止まっていたら次のタップ／キー操作で再開し、
+// それでも時間が進まない（壊れている）ときは音声の仕組みを作り直して、流れていた曲を鳴らし直す。
+let _acLast=-1, _acStuck=0;
+function rebuildAudio(){ const type=currentBgmType; stopBGM(); try{ ac.close(); }catch(e){}
+  ac=null; bgmVerb=null; seVerb=null; nbCache.clear(); jBus=null; _demoBus=null; _acLast=-1; _acStuck=0; initAudio();
+  const f={title:startTitleBGM,demo:startDemoBGM,superboss:startSuperBossBGM,boss2:startBoss2BGM,warp:startWarpBGM,explain:startExplainBGM,boss8:startBoss8BGM,ending:startEndingBGM,ending2:startEndingBGM2,shop:startShopBGM}[type];
+  try{ if(f) f(); else if(/^game/.test(type)) startGameBGM(); }catch(e){} }
+function wakeAudio(){ if(!ac||state==='pause')return;
+  if(ac.state==='closed'||_acStuck>=2){ rebuildAudio(); return; }
+  if(ac.state!=='running'){ try{ ac.resume(); }catch(e){} } }
+setInterval(()=>{ if(!ac||state==='pause')return;
+  if(document.hidden){ _acLast=-1; return; }
+  if(ac.state==='running'){ if(ac.currentTime===_acLast) _acStuck++; else _acStuck=0; _acLast=ac.currentTime; }
+  else { _acLast=-1; try{ ac.resume(); }catch(e){} } },1000);
+['pointerdown','touchend','keydown'].forEach(ev=>addEventListener(ev,wakeAudio,true));
+document.addEventListener('visibilitychange',()=>{ if(!document.hidden) wakeAudio(); });
 function initAudio(){ if(ac)return; ac=new (window.AudioContext||window.webkitAudioContext)();
   master=ac.createGain(); master.gain.value=.8;
   const lim=ac.createDynamicsCompressor(); lim.threshold.value=-8; lim.knee.value=6; lim.ratio.value=12; lim.attack.value=.003; lim.release.value=.2;   // リミッター：BGMとSEが重なっても音割れしないように
@@ -522,35 +539,37 @@ const bSnare=(w,v=.08)=>{ bn(.2,w,{v,f1:1800,f2:400,ft:'bandpass',q:.7}); bv(180
 // 曲ごとに専用の音量バスを通し、曲を止めたときは先読み済みの音もすばやく消す。
 const BGM_AHEAD=.8; let bgmPumps=[], bgmBuses=[];
 function pumpBGM(){ for(const f of bgmPumps) f(); }
-// 重い端末（軽量モード）では、曲を6秒ずつ「前もって録音」してから流す。
+// 重い端末（軽量モード）では、曲を2秒ずつ「前もって録音」してから流す。
 // 録音は裏で行い、再生中は録音済みの音を1本流すだけなので、画面の処理が重くても音が遅れたり途切れたりしない。
-// 曲の中身は同じ（同じ関数で同じ音を作る）。6秒の区切りをまたぐ音の余韻は、各区切りに4秒ぶん余分に録って重ねるので切れない。
-const PRE_CH=6, PRE_TAIL=4, _OAC=window.OfflineAudioContext||window.webkitOfflineAudioContext;
+// 曲の中身は同じ（同じ関数で同じ音を作る）。2秒の区切りをまたぐ音の余韻は、各区切りに4秒ぶん余分に録って重ねるので切れない。
+const PRE_CH=2, PRE_TAIL=4, PRE_SR=24000, _OAC=window.OfflineAudioContext||window.webkitOfflineAudioContext;
 const _preForce=new URLSearchParams(location.search).get('bgm')==='pre';
 let bgmSeqs=[];
 function preMode(){ return !!_OAC&&(LQ||_preForce); }
-function renderChunk(q){ const t0=q.next, sr=ac.sampleRate; let off;
-  try{ off=new _OAC(2,Math.ceil(sr*(PRE_CH+PRE_TAIL)),sr); }catch(e){ q.noPre=true; return; }
+function renderChunk(q){ const t0=q.next, sr=ac.sampleRate, CH=PRE_CH; let off;   // 録音の手間は「区切りの長さ×音の数」で増えるので、2秒ずつ小刻みに録るのが一番軽い
+  // 録音はモノラル・24kHz（曲は左右の広がりがなく、ノイズも10kHz以下にしてあるので音は同じ）。メモリと処理を約1/4に減らす
+  try{ off=new _OAC(1,Math.ceil(PRE_SR*(CH+PRE_TAIL)),PRE_SR); }catch(e){ try{ off=new _OAC(1,Math.ceil(sr*(CH+PRE_TAIL)),sr); }catch(e2){ q.noPre=true; return; } }
   const sv=[ac,bgmGain,bgmOut,bgmVerb], out=off.createGain(); out.connect(off.destination);
   ac=off; bgmGain=out; bgmOut=out; bgmVerb=null;
-  try{ const end=t0+PRE_CH; while(q.next<end){ q.fn(q.step,q.next-t0,q.stepT); q.next+=q.stepT; q.step++; } }
+  try{ const end=t0+CH; while(q.next<end){ q.fn(q.step,q.next-t0,q.stepT); q.next+=q.stepT; q.step++; } }
   catch(e){ console.error(e); } finally { [ac,bgmGain,bgmOut,bgmVerb]=sv; }
   q.busy=true;
-  const done=buf=>{ q.busy=false; if(q.dead||!buf)return; const src=ac.createBufferSource(); src.buffer=buf; src.connect(q.bus);
-    const now=ac.currentTime; if(t0>=now) src.start(t0); else if(now-t0<PRE_CH) src.start(now,now-t0); };
+  const done=buf=>{ q.busy=false; if(q.dead||!buf)return; const src=ac.createBufferSource(); src.buffer=buf; src.connect(q.bus); src.onended=()=>{ try{src.disconnect();}catch(e){} };
+    const now=ac.currentTime; if(t0>=now) src.start(t0); else if(now-t0<CH) src.start(now,now-t0); };
   try{ const pr=off.startRendering(); if(pr&&pr.then) pr.then(done,()=>{ q.busy=false; q.noPre=true; }); else off.oncomplete=e=>done(e.renderedBuffer); }
   catch(e){ q.busy=false; q.noPre=true; } }
-function runSeq(bpm,fn,delay=0){ const q={fn,stepT:60/bpm/4,next:ac.currentTime+.08+delay,step:0,busy:false,dead:false,noPre:false};
+function runSeq(bpm,fn,delay=0){ const q={fn,stepT:60/bpm/4,next:ac.currentTime+.08+delay,step:0,busy:false,dead:false,noPre:false}; q.liveUntil=q.next+2.5;   // 曲の出だし2.5秒はまとめて直接予約して鳴らす（その間に続きを録音するので、録音待ちで遅れない）
   const bus=ac.createGain(); bus.connect(bgmGain); bgmBuses.push(bus); q.bus=bus; bgmSeqs.push(q);
   const tick=()=>{ if(!isBgmPlaying||q.dead)return;
-    if(preMode()&&!q.noPre){   // 録音方式
+    const pre=preMode()&&!q.noPre;
+    if(pre&&q.next>=q.liveUntil){   // 録音方式
       if(q.busy||q.next>=ac.currentTime+PRE_CH+1.5) return;
       while(q.next<ac.currentTime+.05){ q.next+=q.stepT; q.step++; }   // 遅れた分は飛ばして拍を合わせる
       renderChunk(q); return; }
     while(q.next<ac.currentTime){ q.next+=q.stepT; q.step++; }   // 処理が遅れて間に合わなかった音は鳴らさずに飛ばす（まとめて鳴って雑音になるのを防ぐ）
-    if(q.next>=ac.currentTime+BGM_AHEAD) return;
+    const lim=pre?q.liveUntil:ac.currentTime+BGM_AHEAD; if(q.next>=lim) return;
     const o=bgmOut; bgmOut=bus;
-    try{ while(q.next<ac.currentTime+BGM_AHEAD){ fn(q.step,q.next,q.stepT); q.next+=q.stepT; q.step++; } } finally { bgmOut=o; } };
+    try{ while(q.next<lim){ fn(q.step,q.next,q.stepT); q.next+=q.stepT; q.step++; } } finally { bgmOut=o; } };
   bgmPumps.push(tick); bgmIntervals.push(setInterval(tick,25)); }
 // 前作の曲（デモ用）も同じ先読み方式で鳴らす：本体の中の ac.currentTime を「予約する時刻」に置き換えて呼ぶ
 let _demoT=0;
