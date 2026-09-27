@@ -5553,7 +5553,7 @@ function bombHex(B){ if(B.hex)return B.hex; const s=34, rh=s*.87, L=[]; for(let 
 updateBomb=function(){ const B=bombFx; if(!B)return; B.f++;
   for(const p of B.pp){ p.x+=Math.cos(p.a)*p.v; p.y+=Math.sin(p.a)*p.v; p.v*=.985; }
   const R=B.f*BOMB_SPD;
-  enemies.forEach(e=>{ if(e.dead||e.hide||e.hp<=0)return; if(B.f<BK.vib&&!e.frz&&e.x>-30&&e.x<W+30&&Math.hypot(e.x-B.x,e.y-B.y)<R){ e.frz={x:e.x,y:e.y,t:t}; e.flash=0; } if(e.frz){ e.x=e.frz.x; e.y=e.frz.y; e.vx=0; e.vy=0; e.cd=999; } });   // 波が通った敵はその場で停止
+  enemies.forEach(e=>{ if(e.dead||e.hide||e.hp<=0)return; if(B.f<BK.vib&&!e.frz&&e.x>-30&&e.x<W+30&&Math.hypot(e.x-B.x,e.y-B.y)<R){ e.frz={x:e.x,y:e.y,t:t,sx:scroll}; e.flash=0; } if(e.frz){ e.x=e.frz.x-(scroll-e.frz.sx); e.y=e.frz.y; e.vx=0; e.vy=0; e.cd=999; } });   // 波が通った敵はその場で停止
   let popped=0; eBullets=eBullets.filter(b=>{ if(Math.hypot(b.x-B.x,b.y-B.y)<R){ popped++; for(let k=0;k<3;k++){ const a=Math.random()*Math.PI*2; particles.push({x:b.x,y:b.y,vx:Math.cos(a)*2,vy:Math.sin(a)*2,life:18,c:k?'#b8fff0':'#ffffff'}); } B.rings.push({x:b.x,y:b.y,f:0}); return false; } return true; });
   if(popped){ addScore(10*popped); if(B.f%3===0) sfx.bombPop(); }
   B.rings=B.rings.filter(r=>++r.f<14);
