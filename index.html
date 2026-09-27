@@ -111,6 +111,17 @@
   #resumeBox small{display:block;font-size:12px;color:var(--dim);margin-top:2px}
   #nameMenu{justify-content:flex-start;padding-top:9vh}
   #nameMenu .nm{display:flex;align-items:center;gap:6px;font-size:30px;color:var(--plasma)}
+  /* 名前入力：キーボードで狭くなった実際の表示高さ（--nh）に合わせて縮む。狭いほど説明文→見出しの順に隠し、さらに狭いと1行に並べる */
+  #nameMenu{position:fixed!important;top:var(--nt,0px)!important;bottom:auto!important;height:var(--nh,100dvh);padding:min(9vh,calc(var(--nh,100dvh)*.06)) 10px 0!important;gap:min(14px,calc(var(--nh,100dvh)*.035))!important;box-sizing:border-box;overflow:hidden}
+  #nameMenu h2{font-size:min(36px,calc(var(--nh,100dvh)*.1))!important}
+  #nameMenu>p{font-size:min(16px,calc(var(--nh,100dvh)*.05))}
+  #nameMenu .nm{font-size:min(30px,calc(var(--nh,100dvh)*.1))}
+  #nameInput{font-size:max(16px,min(30px,calc(var(--nh,100dvh)*.1)))!important;padding:.15em .4em!important;width:min(9.5em,60vw)!important}   /* 16px未満だとiPhoneで画面が拡大されるため下限16px */
+  #nameMenu .row button{font-size:max(14px,min(20px,calc(var(--nh,100dvh)*.065)))!important;padding:.35em 1.1em!important}
+  #nameMenu.nmS>p{display:none}
+  #nameMenu.nmXS h2{display:none}
+  #nameMenu.nmXS{flex-direction:row!important;flex-wrap:wrap;justify-content:center!important;align-items:center!important;padding-top:4px!important}
+  #nameMenu.nmXS .row{flex-wrap:nowrap}
   #nameInput{font:inherit;font-size:30px;width:9.5em;padding:6px 12px;border-radius:10px;background:rgba(10,4,30,.9);color:#e9e4ff;border:2px solid var(--plasma);text-transform:uppercase;letter-spacing:.08em;outline:none}
   #contBox:empty{display:none}
   #stageMenu .row{max-width:620px}
@@ -123,6 +134,7 @@
   #credits .line{width:260px;height:2px;margin:8px auto;background:linear-gradient(90deg,transparent,var(--plasma),transparent)}
   #screen h1 .sub{display:block;font-size:.42em;color:var(--plasma);letter-spacing:.3em;margin-top:6px;text-shadow:none}
   #screen{background:radial-gradient(ellipse at center,rgba(40,8,60,.35),rgba(5,2,26,.72))}
+  #autoBtn.on{background:#ffd23e!important;color:#04120c!important;border-color:#ffd23e!important}
   #godBtn.on{background:#ff3d7f!important;color:#fff!important;border-color:#ff3d7f!important}
   #formBar{position:absolute;left:12px;bottom:12px;z-index:4;display:flex;gap:6px;touch-action:none}
   #formBar button{position:relative;overflow:hidden;font:inherit;font-size:14px;letter-spacing:.06em;padding:8px 12px;border-radius:9px;cursor:pointer;background:rgba(6,2,22,.72);color:var(--dim);border:1px solid var(--dim);touch-action:none}
@@ -233,7 +245,7 @@
   <div id="test" class="hidden" data-debug="1">
     <span>武器テスト</span>
     <button data-w="NORMAL">N</button><button data-w="D">D</button><button data-w="W">W</button><button data-w="T">T</button>
-    <button data-w="L">L</button><button data-w="F">F</button><button data-w="R">R</button><button data-a="1">A＋</button><button data-o="1">O＋</button><button data-s="1">S</button><button data-g="1" id="godBtn">無敵 OFF</button>
+    <button data-w="L">L</button><button data-w="F">F</button><button data-w="R">R</button><button data-a="1">A＋</button><button data-o="1">O＋</button><button data-s="1">S</button><button data-g="1" id="godBtn">無敵 OFF</button><button data-auto="1" id="autoBtn">AUTO OFF</button>
     <span style="margin-left:8px">BASE</span><button data-b="pw">POW＋</button><button data-b="sh">SHOT＋</button><button data-b="mv">MOVE＋</button><button data-br="1">BASE 0</button><span id="baseInfo">0/11 通常</span>
     <span style="margin-left:8px">STAGE</span><button data-st="1">1</button><button data-st="2">2</button><button data-st="3">3</button><button data-st="4">4</button><button data-st="5">5</button><button data-st="6">6</button><button data-st="7">7</button><button data-st="8">8</button><button data-dk="b">BOSS</button><button data-dk="n">CLEAR</button><button data-tog="1" id="dbgTog">非表示</button>
   </div>
@@ -3482,7 +3494,7 @@ function updateWarp(){
   else if(w.phase===1){ const k=w.f/P1; speed=1.35+(18-1.35)*k*k; w.shipX=300-60*Math.sin(k*Math.PI/2); w.shipY+=(H/2-w.shipY)*.05; }
   else if(w.phase===2){ const k=w.f/P2; speed=18; w.m=clamp((k-.25)/.5,0,1);
     w.bulge=Math.sin(k*Math.PI)*(30+18*Math.sin(t*.25)); w.shipX=240+(W+80-240)*Math.pow(k,1.3); w.shipY=H/2+Math.sin(t*.06)*18*clamp(k*4,0,1); }
-  else { speed=0; if(w.f>60&&w.tap){ w.go=true; w.f=WL(3); } }   // 解説画面は、表示から1秒後以降にタップ／スペースを押したときだけ進む
+  else { speed=0; if(autoPlay&&w.f>180)w.tap=true; if(w.f>60&&w.tap){ w.go=true; w.f=WL(3); } }   // オートプレイ中は3秒表示してから自動で進む   // 解説画面は、表示から1秒後以降にタップ／スペースを押したときだけ進む
   if(w.phase<3) scroll+=speed;
   particles.forEach(p=>{p.x+=p.vx;p.y+=p.vy;p.vx*=.96;p.vy*=.96;p.life--;}); particles=particles.filter(p=>p.life>0);
   // 段階0は、セリフの文字送りが終わってから3秒待って進む（最大WARP_HOLD_MAXまで）
@@ -3583,7 +3595,13 @@ function shopMove(dc,dr){ const S=warp.shop, cols=shopItems();
 function shopHit(x,y){ for(const col of shopItems()) for(const it of col) if(x>=it.x&&x<=it.x+it.w&&y>=it.y&&y<=it.y+it.h) return it; return null; }
 const SHOP_MODAL={x:W/2-230,y:H/2-80,w:460,h:170, yes:{x:W/2-130,y:H/2+36,w:110,h:34}, no:{x:W/2+20,y:H/2+36,w:110,h:34}};
 const inR=(x,y,r)=>x>=r.x&&x<=r.x+r.w&&y>=r.y&&y<=r.y+r.h;
-function updateShop(w){ const S=w.shop; S.t++; if(S.fx>0)S.fx--; if(S.fxBig>0)S.fxBig--;
+// オートプレイのショップ：BASE（低いものから均等）→ 装備（少ないものから均等）の順に、CREDITが許す限り買う。武器は変えない
+function autoShopPick(){ const col=shopItems()[1], ok=it=>!shopBlocked(it);
+  const pick=L=>{ L=L.filter(ok); if(!L.length)return null; return L.reduce((a,b)=>b.lv<a.lv?b:a); };   // レベル（個数）がいちばん低いものから
+  return pick(col.filter(it=>it.base))||pick(col.filter(it=>['A','O','S','B'].includes(it.k))); }
+function autoShop(w,S){ if(S.modal||S.t<50||S.t%14)return; if(S.autoEnd){ if(S.t>=S.autoEnd)leaveShop(w); return; }
+  const it=autoShopPick(); if(it){ S.sel=it.k; S.modal={k:it.k}; shopConfirm(true); } else S.autoEnd=S.t+90; }
+function updateShop(w){ const S=w.shop; S.t++; if(S.fx>0)S.fx--; if(S.fxBig>0)S.fxBig--; if(autoPlay)autoShop(w,S);
   particles.forEach(p=>{p.x+=p.vx;p.y+=p.vy;p.vx*=.96;p.vy*=.96;p.life--;}); particles=particles.filter(p=>p.life>0); }
 // 「現在の自機」パネル：実機の描画で、オプション・シールド・試し撃ちまで表示
 function drawShopShip(S){ const px=640,py=150,pw=W-24-640,ph=220, cx=px+pw*.42, cy=py+ph/2+Math.sin(t*.04)*8, K=1.7;
@@ -3782,7 +3800,7 @@ function stopDemo(){ if(!demo)return; gTimers=[]; demo=false; boss=null; idleTim
   if(currentBgmType!=='title')startTitleBGM(); }
 // ---------------- ゲーム進行 ----------------
 function reset(){
-  gTimers=[];
+  gTimers=[]; autoUsed=autoPlay;
   stage=1;warp=null;$('stageName').textContent=STAGES[1].name;
   SK=STAGE_SK[1]||1.2; STAGE_LEN=Math.round(BASE_LEN*SK); mid8=0; playT=0;   // 前のプレイの倍率・長さを残さない
   scroll=0;speed=1.35;score=0;credit=0;base.pw=base.sh=base.mv=0;shipSpr=0;lives=cfg.lives===0?Infinity:cfg.lives;t=0;boss=null;msg=null;
@@ -3791,7 +3809,8 @@ function reset(){
   events=buildEvents();
   player={x:140,y:H/2,vx:0,vy:0,cd:0,inv:90,dead:0};
 }
-let godMode=false;   // デバッグ用：無敵
+let godMode=false;
+let autoPlay=false, autoUsed=false;   // デバッグ用オートプレイ（デモと同じ動き）／このプレイで一度でも使ったらハイスコアに残さない   // デバッグ用：無敵
 function killPlayer(){ if(godMode)return;
   if(player.inv>0||player.dead)return;
   if(shield>0){ shieldPeel={k:Math.min(3,shield)-1,f:0,col:SH_COL[Math.min(3,shield)]}; shield--; player.inv=60; shake=8; sfx.shield(); explode(player.x+5,player.y,14,'#8fd8ff'); updateWeaponHud(); return; }
@@ -3817,7 +3836,7 @@ function update(){
   else{
     const slw=player.slow>0?(player.slow--,.5):1;   // 毒の胞子雲（INFERNO）の中では遅くなる
     const sp=(4.2+curSpeedLv()*0.9)*(1+BASE_RATE*base.mv)*slw; let dx=(keys.ArrowRight||keys.d?1:0)-(keys.ArrowLeft||keys.a?1:0), dy=(keys.ArrowDown||keys.s?1:0)-(keys.ArrowUp||keys.w?1:0);
-    if(demo){ const d=demoAI(); dx=d.dx; dy=d.dy; }
+    if(demo||autoPlay){ const d=demoAI(); dx=d.dx; dy=d.dy; }
     if(player.enter){ dx=0; dy=0; }
     if(player.stun>0){ player.stun--; dx=0; dy=0; }
     if(dx&&dy){dx*=.707;dy*=.707;}
@@ -3836,7 +3855,7 @@ function update(){
     updateOptions();
     if(player.inv>0)player.inv--;
     if(player.cd>0)player.cd--;
-    if((keys[' ']||touch.active||(demo&&state!=='clear'&&!(boss&&boss.dead)))&&player.cd<=0&&!player.enter&&!(player.stun>0)){ fire(); player.cd=Math.round(({NORMAL:12,D:17,T:16,W:20,L:19,F:18,R:14}[weapon]||14)*(1-BASE_RATE*base.sh)); }
+    if((keys[' ']||touch.active||((demo||autoPlay)&&state!=='clear'&&!(boss&&boss.dead)))&&player.cd<=0&&!player.enter&&!(player.stun>0)){ fire(); player.cd=Math.round(({NORMAL:12,D:17,T:16,W:20,L:19,F:18,R:14}[weapon]||14)*(1-BASE_RATE*base.sh)); }
     if(!player.enter&&(hitsTerrain(player.x,player.y,7*PS)||hitsTerrain(player.x+16*PS,player.y,3*PS)||hitsTerrain(player.x+34*PS,player.y,2*PS))) killPlayer();
   }
   // 弾
@@ -3986,7 +4005,7 @@ function update(){
   items=items.filter(i=>!i.dead&&i.x>-20);
 
   // ボス
-  if(demo)demoFormation();
+  if(demo||autoPlay)demoFormation();
   updateBossMinions();
   updateBomb();
   if(boss&&!boss.hpK) scaleBossHP(boss);
@@ -4084,7 +4103,7 @@ function applyPowerUp(type){
 function updateWeaponHud(){
   let st=WEAPON_NAMES[weapon]; if(optionCount)st+=' +O'+optionCount; if(speedLv)st+=' +A'+speedLv; if(shield)st+=' +S'+shield;
   $('weapon').textContent=st;
-  document.querySelectorAll('#test button').forEach(b=>b.classList.toggle('on',b.dataset.w===weapon));
+  document.querySelectorAll('#test button[data-w]').forEach(b=>b.classList.toggle('on',b.dataset.w===weapon));   // 武器ボタンだけ（無敵・AUTOの表示は消さない）
 }
 function bulletHits(b,x,y,r){
   if(b.laser){ const sp=Math.hypot(b.vx,b.vy), ux=b.vx/sp, uy=b.vy/sp;
@@ -4638,7 +4657,7 @@ $('resumeBtn').onclick=e=>{ e.stopPropagation(); resumeGame(); };
 $('quitBtn').onclick=e=>{ e.stopPropagation(); quitToTitle(); };
 addEventListener('keydown',e=>{ if(e.key==='p'||e.key==='P'||e.key==='Escape'){ if(state==='pause')resumeGame(); else pauseGame(); } });
 function recordHi(){
-  if(demo)return false; const hi=lsGet(LS.hi,null);
+  if(demo||autoUsed)return false; const hi=lsGet(LS.hi,null);   // オートプレイを使ったプレイは記録しない
   if(score>0&&(!hi||score>hi.score)){ lsSet(LS.hi,{score,diff:cfg.diff,lives:cfg.lives,stage,date:new Date().toLocaleDateString('ja-JP')}); return true; }
   return false;
 }
@@ -4712,7 +4731,7 @@ function opTyp(s,st,sp=.5){ const n=Math.max(0,Math.floor((op.t-st)*sp)), m=[...
   return m.slice(0,n).join(''); }
 const opEase=v=>1-Math.pow(1-clamp(v,0,1),3);
 function startOpening(){ demo=false; $('demoTag').classList.add('hidden'); initAudio(); if(ac.state==='suspended')ac.resume();
-  reset(); state='opening'; op={t:0,hit:0,shake:0,bugs:[]};
+  reset(); state='opening'; op={t:isInf()?OP_L1:0,hit:0,shake:0,bugs:[]};   // INFERNO：ブリーフィングと起動ログを飛ばし、出撃演出から
   for(let i=0;i<170;i++){ const h=Math.random()<.15; op.bugs.push({x:h?(Math.random()-.5)*60:(Math.random()-.5)*140,y:h?30+Math.random()*80:190+Math.random()*320,d:Math.random()*9}); }
   $('screen').classList.add('hidden'); $('hud').classList.add('hidden'); $('test').classList.add('hidden'); $('volPanel').classList.add('hidden'); $('volBtn').classList.add('hidden');
   startTitleBGM(); }   // BGMはタイトル曲をそのまま流す
@@ -5262,7 +5281,10 @@ TALK[8]={at:[[60,'脳内に到達しました。ここが病原体の中枢と�
 
 // NEW GAME → 名前入力 → オープニング → ステージ1
 let nameOpen=false;
-function openNameMenu(){ nameOpen=true; const i=$('nameInput'); i.value=playerName==='T'&&!lsGet(LS.name,null)?'':playerName; $('nameMenu').classList.remove('hidden'); $('volPanel').classList.add('hidden'); setTimeout(()=>i.focus(),30); }
+function openNameMenu(){ nameOpen=true; const i=$('nameInput'); i.value=playerName==='T'&&!lsGet(LS.name,null)?'':playerName; $('nameMenu').classList.remove('hidden'); $('volPanel').classList.add('hidden'); fitName(); setTimeout(()=>{ i.focus(); fitName(); },30); [300,700].forEach(ms=>setTimeout(fitName,ms)); }   // キーボードが出てから高さを合わせ直す
+function fitName(){ const m=$('nameMenu'); if(!m||m.classList.contains('hidden'))return; const vv=window.visualViewport, h=vv?vv.height:innerHeight, top=vv?vv.offsetTop:0;
+  m.style.setProperty('--nh',h+'px'); m.style.setProperty('--nt',top+'px'); m.classList.toggle('nmS',h<300); m.classList.toggle('nmXS',h<190); }
+if(window.visualViewport){ visualViewport.addEventListener('resize',fitName); visualViewport.addEventListener('scroll',fitName); } addEventListener('resize',fitName);
 function closeNameMenu(){ nameOpen=false; $('nameMenu').classList.add('hidden'); $('nameInput').blur(); }
 async function decideName(){ playerName=[...$('nameInput').value.replace(/[\x00-\x1f\x7f<>{}]/g,'').trim().toUpperCase()].slice(0,8).join('')||'T'; lsSet(LS.name,playerName); closeNameMenu();
   if(fsSupported()&&!isFull()&&document.body.classList.contains('started')) await goFullscreen();   // スマホでキーボードにより全画面が解除されたときは戻す
@@ -5377,9 +5399,11 @@ let dbgCol=!!lsGet('gv2_dbgcol',false);
 function applyDbgCol(){ $('test').classList.toggle('col',dbgCol); $('dbgTog').textContent=dbgCol?'DEBUG 表示':'非表示'; }
 function toggleDbg(){ dbgCol=!dbgCol; lsSet('gv2_dbgcol',dbgCol); applyDbgCol(); }
 applyDbgCol();
+function setAuto(on){ autoPlay=on; if(on)autoUsed=true; const b=$('autoBtn'); b.textContent='AUTO '+(on?'ON':'OFF'); b.classList.toggle('on',on); }
 function testPick(el){ if(!el)return; if(el.dataset.tog){ toggleDbg(); return; } if(el.dataset.st){ debugJump(+el.dataset.st); return; } if(el.dataset.dk){ debugKey(el.dataset.dk); return; }
   if(el.dataset.b){ const k=el.dataset.b; if(base[k]<BASE_MAX[k]){ base[k]++; sfx.item(); } updBaseInfo(); return; }   // 基礎性能を1段階上げる（機体デザインも変わる）
   if(el.dataset.br){ base.pw=base.sh=base.mv=0; sfx.item(); updBaseInfo(); return; }   // 基礎性能を0に戻す
+  if(el.dataset.auto){ setAuto(!autoPlay); sfx.item(); return; }
   if(el.dataset.g){ godMode=!godMode; el.textContent='無敵 '+(godMode?'ON':'OFF'); el.classList.toggle('on',godMode); sfx.item(); return; } if(el.dataset.w)weapon=el.dataset.w; if(el.dataset.a&&speedLv<4)speedLv++; if(el.dataset.o&&optionCount<4)optionCount++; if(el.dataset.s)shield=3; sfx.item(); updateWeaponHud(); }
 document.querySelectorAll('#test button').forEach(b=>{ b.addEventListener('click',()=>testPick(b)); b.addEventListener('touchstart',e=>{e.stopPropagation();},{passive:true}); });
 addEventListener('keydown',e=>{ const i='1234567890'.indexOf(e.key); if(i>=0&&debug&&state!=='title')testPick(document.querySelectorAll('#test button')[i]); });
