@@ -5442,7 +5442,7 @@ new MutationObserver(()=>{ const pn=$('volPanel'); document.body.classList.toggl
 $('cfgClose').onclick=e=>{ e.stopPropagation(); $('volPanel').classList.add('hidden'); disarmClear(); };
 // iPad：全画面中に画面をなぞっても、ページのスクロールやズームが起きないようにする（全画面が解除されにくくなる）
 // スライダー・入力欄だけは通常どおり操作できるようにする
-document.addEventListener('touchmove',e=>{ if(e.target.closest&&e.target.closest('input,textarea,select'))return; if(e.cancelable)e.preventDefault(); },{passive:false});
+document.addEventListener('touchmove',e=>{ if(e.target.closest&&e.target.closest('input,textarea,select,#policy .pbody'))return; if(e.cancelable)e.preventDefault(); },{passive:false});
 ['gesturestart','gesturechange'].forEach(ev=>document.addEventListener(ev,e=>e.preventDefault(),{passive:false}));
 function disarmClear(){ clearTimeout(clearArmed); clearArmed=null; $('clearBtn').classList.remove('armed'); $('clearBtn').textContent='記録を削除'; }
 $('clearBtn').onclick=e=>{ e.stopPropagation();
