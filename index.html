@@ -2808,23 +2808,32 @@ function phase2B8(){ const b=boss; b.phase=2; boss8Ph=2; b.open=0; b.regrow=1; b
   msg={text:'!! WARNING !!',sub:'異常型プリオン 第2形態',life:160}; sfx.armor(); shake=18; eBullets=[];
   talkQ=[]; talkCur=null; say('構造体の増殖が加速しています。脳組織に空胞が広がっています。急いでください、{DR}',false,1); }
 // INFERNO：アミロイドの格子。予告のあと、画面を縦横に横切る結晶の線が格子状に走る。線に触れるとミス、マスの中なら安全
-const GRID_WARN=60, GRID_ON=40, GRID_OFF=16;
-function infGrid8(b){ if(b.grT==null)b.grT=300;
+const GRID_WARN=60, GRID_SW=30, GRID_ON=40, GRID_OFF=16;   // 予告／光が端から走り抜ける時間／線が残る時間／消える時間（フレーム）
+function infGrid8(b){ if(b.grT==null)b.grT=240;
   if(!b.grid&&!b.walls.length&&--b.grT<=0){ const xs=[], ys=[], ox=40+Math.random()*100, oy=70+Math.random()*60;
     for(let x=ox;x<640;x+=150) xs.push(x); for(let y=oy;y<H-60;y+=125) ys.push(y);
-    b.grid={xs,ys,f:0}; b.grT=b.phase===2?360:440; sfx.armWarn8(); addFloater(W/2-80,90,'アミロイドの格子！','#ff9ac8'); infSay(b,'grid'); }
-  const g=b.grid; if(!g)return; g.f++; if(g.f===GRID_WARN)sfx.shatter8();
-  if(g.f>GRID_WARN+GRID_ON+GRID_OFF){ b.grid=null; return; }
-  if(g.f>=GRID_WARN&&g.f<GRID_WARN+GRID_ON&&!player.dead&&!player.enter&&player.inv<=0){
+    b.grid={xs,ys,f:0}; b.grT=b.phase===2?270:330; sfx.armWarn8(); addFloater(W/2-80,90,'アミロイドの格子！','#ff9ac8'); infSay(b,'grid'); }   // 約5.5秒に1回（第2形態は約4.5秒）
+  const g=b.grid; if(!g)return; g.f++; if(g.f===GRID_WARN){ sfx.shatter8(); sfx.expose8(); shake=Math.max(shake,20); }   // 発動の瞬間：画面が光って揺れる
+  if(g.f>GRID_WARN+GRID_SW+GRID_ON+GRID_OFF){ b.grid=null; return; }
+  if(g.f>=GRID_WARN+GRID_SW-2&&g.f<GRID_WARN+GRID_SW+GRID_ON&&!player.dead&&!player.enter&&player.inv<=0){   // 線が画面を横切りきってから当たり判定
     const hit=g.xs.some(x=>Math.abs(player.x-x)<7)||g.ys.some(y=>Math.abs(player.y-y)<7); if(hit)killPlayer(); } }
 function drawGrid8(b){ const g=b.grid; if(!g)return; ctx.save();
-  if(g.f<GRID_WARN){ const bl=Math.floor(t/5)%2; ctx.strokeStyle=bc(9,`rgba(255,160,210,${bl?.7:.3})`); ctx.lineWidth=1.5; ctx.setLineDash([6,8]); ctx.beginPath();
-    g.xs.forEach(x=>{ ctx.moveTo(x,0); ctx.lineTo(x,H); }); g.ys.forEach(y=>{ ctx.moveTo(0,y); ctx.lineTo(W,y); }); ctx.stroke(); ctx.setLineDash([]); }
-  else { const k=g.f<GRID_WARN+GRID_ON?1:1-(g.f-GRID_WARN-GRID_ON)/GRID_OFF, grow=clamp((g.f-GRID_WARN)/6,0,1);
+  if(g.f<GRID_WARN){ const bl=Math.floor(t/5)%2, k=g.f/GRID_WARN; ctx.strokeStyle=bc(9,`rgba(255,160,210,${bl?.7:.3})`); ctx.lineWidth=1.5; ctx.setLineDash([6,8]); ctx.beginPath();
+    g.xs.forEach(x=>{ ctx.moveTo(x,0); ctx.lineTo(x,H); }); g.ys.forEach(y=>{ ctx.moveTo(0,y); ctx.lineTo(W,y); }); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle=bc(9,`rgba(255,200,230,${.15+.55*k})`); ctx.beginPath(); g.xs.forEach(x=>g.ys.forEach(y=>{ ctx.moveTo(x+3+6*k,y); ctx.arc(x,y,3+6*k,0,7); })); ctx.fill(); }   // 交点がだんだん強く光る
+  else { const gf=g.f-GRID_WARN, L=clamp(gf/GRID_SW,0,1), end=GRID_SW+GRID_ON, k=gf<end?1:1-(gf-end)/GRID_OFF;
     ctx.globalAlpha=k; ctx.lineCap='round';
-    for(const [w,c] of [[9,bc(9,'rgba(255,90,170,.35)')],[3,bc(9,'#ffd6ec')]]){ ctx.strokeStyle=c; ctx.lineWidth=w; ctx.beginPath();
-      g.xs.forEach(x=>{ ctx.moveTo(x,H/2-H/2*grow); ctx.lineTo(x,H/2+H/2*grow); }); g.ys.forEach(y=>{ ctx.moveTo(W/2-W/2*grow,y); ctx.lineTo(W/2+W/2*grow,y); }); ctx.stroke(); }
-    ctx.fillStyle=bc(9,'#ffffff'); g.xs.forEach(x=>g.ys.forEach(y=>{ ctx.beginPath(); ctx.moveTo(x,y-6); ctx.lineTo(x+4,y); ctx.lineTo(x,y+6); ctx.lineTo(x-4,y); ctx.closePath(); ctx.fill(); })); }   // 交点に結晶の粒
+    const segs=[]; g.xs.forEach((x,i)=>{ const fromTop=i%2===0, e=fromTop?H*L:H-H*L; segs.push([x,fromTop?0:H,x,e]); });   // 縦は上下から交互に、横は左右から交互に走る
+    g.ys.forEach((y,i)=>{ const fromL=i%2===0, e=fromL?W*L:W-W*L; segs.push([fromL?0:W,y,e,y]); });
+    for(const [w,c] of [[9,bc(9,'rgba(255,90,170,.35)')],[3,bc(9,'#ffd6ec')]]){ ctx.strokeStyle=c; ctx.lineWidth=w; ctx.beginPath(); segs.forEach(q=>{ ctx.moveTo(q[0],q[1]); ctx.lineTo(q[2],q[3]); }); ctx.stroke(); }
+    if(gf<end){ // 走査線に沿って走る電流：線ごとにギザギザの放電を描き（毎フレーム形が変わる）、光の粒が線の上を流れる
+      ctx.beginPath(); segs.forEach(q=>{ const len=Math.hypot(q[2]-q[0],q[3]-q[1]); if(len<4)return; const ux=(q[2]-q[0])/len, uy=(q[3]-q[1])/len, n=Math.max(2,Math.floor(len/16));
+        for(let j=0;j<=n;j++){ const d=len*j/n, o=j===0||j===n?0:(Math.random()-.5)*16, px=q[0]+ux*d-uy*o, py=q[1]+uy*d+ux*o; j?ctx.lineTo(px,py):ctx.moveTo(px,py); } });
+      ctx.strokeStyle=bc(9,'rgba(200,230,255,.35)'); ctx.lineWidth=5; ctx.stroke(); ctx.strokeStyle=bc(9,'rgba(255,255,255,.95)'); ctx.lineWidth=1.3; ctx.stroke();
+      const sp=(gf*24)%1400; ctx.fillStyle=bc(9,'#ffffff'); ctx.beginPath(); segs.forEach((q,i)=>{ const len=Math.hypot(q[2]-q[0],q[3]-q[1]); for(let d=(sp+i*90)%180;d<len;d+=180){ const u=d/len, px=q[0]+(q[2]-q[0])*u, py=q[1]+(q[3]-q[1])*u; ctx.moveTo(px+4,py); ctx.arc(px,py,4,0,7); } }); ctx.fill(); }   // 流れる電流の粒
+    if(L<1){ ctx.fillStyle=bc(9,'#ffffff'); ctx.beginPath(); segs.forEach(q=>{ ctx.moveTo(q[2]+10,q[3]); ctx.arc(q[2],q[3],10,0,7); }); ctx.fill(); ctx.globalAlpha=k*.35; ctx.beginPath(); segs.forEach(q=>{ ctx.moveTo(q[2]+22,q[3]); ctx.arc(q[2],q[3],22,0,7); }); ctx.fill(); ctx.globalAlpha=k; }   // 走る光の先端（大きな光の輪つき）
+    ctx.fillStyle=bc(9,'#ffffff'); ctx.beginPath(); g.xs.forEach(x=>g.ys.forEach(y=>{ ctx.moveTo(x,y-6); ctx.lineTo(x+4,y); ctx.lineTo(x,y+6); ctx.lineTo(x-4,y); ctx.closePath(); })); ctx.fill();   // 交点の結晶の粒
+    ctx.globalAlpha=1; if(gf<18){ ctx.fillStyle=`rgba(255,255,255,${.85*(1-gf/18)})`; ctx.fillRect(0,0,W,H); } }   // 発動の瞬間の白い閃光
   ctx.restore(); }
 function drawBoss8(){ const b=boss, f=b.flash>0, fade=b.dead?clamp(1-(b.dead-140)/140,0,1):1; if(b.phase===2) vac8Grow=Math.min(1,vac8Grow+.004);
   if(isInf()&&!b.dead)drawGrid8(b);
@@ -3771,7 +3780,7 @@ function aiDanger(sx,sy,vx,vy,N){   // 自機がこの向きにN フレーム進
     for(const e of enemies){ if(e.dead||e.hide||e.harmless)continue; const ex=e.x+(e.vx!=null?e.vx:-speed)*f, ey=e.y+(e.vy||0)*f, m=(e.r||12)+HR+14, dd=Math.hypot(ex-x,ey-y);
       if(dd<m) d+=(m-dd)*(m-dd)*(e.type==='ab'?1:3)*wf; }
     if(boss&&!boss.dead){ const m=(boss.r||60)+20, dd=Math.hypot(boss.x-x,boss.y-y); if(dd<m) d+=(m-dd)*(m-dd)*3*wf;
-      if(boss.grid){ const g=boss.grid; if(g.f+f>=GRID_WARN-6&&g.f+f<GRID_WARN+GRID_ON&&(g.xs.some(q=>Math.abs(q-x)<16)||g.ys.some(q=>Math.abs(q-y)<16))) d+=900*wf; }   // 格子の線
+      if(boss.grid){ const g=boss.grid; if(g.f+f>=GRID_WARN-6&&g.f+f<GRID_WARN+GRID_SW+GRID_ON&&(g.xs.some(q=>Math.abs(q-x)<16)||g.ys.some(q=>Math.abs(q-y)<16))) d+=900*wf; }   // 格子の線
       if(boss.walls) for(const w of boss.walls){ if(Math.abs(w.x-x)<30){ const k=Math.max(wallK(w),w.f+f>=w.warn?1:0); if(k>.3&&(y<w.g0+10||y>w.g1-10)) d+=700*wf; } }   // 天井・床から伸びる腕
       if(boss.spk) for(const q of boss.spk){ const ff=q.f+f; if(ff>=42&&ff<120&&Math.abs(q.x-x)<26){ const tip=q.fromTop?q.top+q.len:q.bot-q.len; if(q.fromTop?y<tip+14:y>tip-14) d+=900*wf; } }   // 結晶の槍
       if(boss.gl){ const g=boss.gl; if(Math.abs(x-g.x0)<16||(Math.abs(x-g.x1)<16&&Math.abs(y-g.gy)>=45)) d+=900*wf; } }   // グリアの壁
