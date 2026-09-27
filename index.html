@@ -4001,7 +4001,8 @@ function update(){
     if(e.type==='ion'){ e.ph+=.12; e.x-=3.4; e.y=midY(e.x+scroll)+e.off+Math.sin(e.ph)*6; }
     if(e.type==='uti'){ e.x=e.wx-scroll; e.y=e.ceil?ceilH(e.wx)+16:H-floorH(e.wx)-16; if(--e.cd<=0&&e.x<W-30&&e.x>60){ fan([-.3,0,.3]).forEach(s=>aim(e.x,e.y,2.6,s)); e.cd=120; } }
     if(e.type==='turret'){ e.x=e.wx-scroll; if(--e.cd<=0&&e.x<W-20&&e.x>60){shoot(e.x,e.y-10,2.4);e.cd=100;} }
-    if(e.type!=='ab') bullets.forEach(b=>{ if(!b.dead&&e.hp>0&&!e.hide&&canHit(b,e)&&bulletHits(b,e.x,e.y,e.r)){ e.hp-=b.dmg; e.flash=4; sfx.hit(); onBulletHit(b,e); } });   // 抗体は自機の弾をすり抜ける
+    if(e.frz&&bombFx){ e.x=e.frz.x-(scroll-e.frz.sx); e.y=e.frz.y; }   // 止まっている敵は、当たり判定も止めた位置で
+    if(e.type!=='ab') bullets.forEach(b=>{ if(!b.dead&&e.hp>0&&!e.hide&&canHit(b,e)&&bulletHits(b,e.x,e.y,e.r)){ if(e.frz){ onBulletHit(b,e); explode(b.x,b.y,2,'#b8fff0'); return; } e.hp-=b.dmg; e.flash=4; sfx.hit(); onBulletHit(b,e); } });   // 抗体は自機の弾をすり抜ける
     if(e.hp<=0&&!e.dead){ e.dead=1; addScore(e.pts); explode(e.x,e.y,e.type==='phage'||e.type==='coccus'?12:24,e.type==='pneumo'||e.type==='coccus'?'#c49bff':undefined); sfx.boom();
       if(e.type==='chol'&&!e.minion) for(let k=0;k<3;k++){ const a=k*2.1; enemies.push({type:'cholbit',x:e.x,y:e.y,vx:Math.cos(a)*2,vy:Math.sin(a)*2,hp:1,r:10,flash:0,drop:false,pts:60}); }
       if(e.type==='alcohol') addFloater(e.x,e.y,'→ 無毒化');
@@ -5579,7 +5580,11 @@ drawBomb=function(){ const B=bombFx; if(!B)return; const f=B.f, a=Math.max(0,1-f
 // ================= 更新・描画のつなぎ替え =================
 function vibK(){ const B=bombFx; if(!B||B.f<BK.hold)return 0; const k=(B.f-BK.hold)/(BK.vib-BK.hold); return k*k; }   // 完全停止 → 徐々に強く
 const _dE=drawEnemy; drawEnemy=function(e){ if(!e.frz||!bombFx){ _dE(e); return; } const k=vibK(), jx=(Math.random()-.5)*k*12, jy=(Math.random()-.5)*k*12, t0=t; t=e.frz.t; e.x+=jx; e.y+=jy; try{ _dE(e); } finally { e.x-=jx; e.y-=jy; t=t0; } };
-const _uBs=updateBoss; updateBoss=function(){ if(boss&&boss.frz&&bombFx){ if(boss.flash>0)boss.flash=0; (boss.parts||[]).forEach(p=>p.flash=0); return; } _uBs(); };   // 止まっている間は動きも攻撃もしない
+const _uBs=updateBoss; updateBoss=function(){ const b=boss; if(!(b&&b.frz&&bombFx)){ _uBs(); return; }   // 止まっている間：動き・攻撃は止め、自機の弾のダメージだけ受ける
+  const KEEP=new Set(['hp','flash','dead','shown','cp','armor','phase','open','regrow']), objs=[b]; ['parts','segs','structs','crys','walls'].forEach(k=>Array.isArray(b[k])&&b[k].forEach(o=>o&&typeof o==='object'&&objs.push(o))); if(b.head)objs.push(b.head);
+  const snap=objs.map(o=>{ const s={}; for(const k in o){ const v=o[k]; if(typeof v==='number'&&!KEEP.has(k))s[k]=v; } return s; }), nE=enemies.length, nB=eBullets.length;
+  _uBs(); if(boss!==b)return;
+  objs.forEach((o,i)=>Object.assign(o,snap[i])); enemies.length=Math.min(enemies.length,nE); eBullets.length=Math.min(eBullets.length,nB); };
 const _dBs=drawBoss; drawBoss=function(){ const b=boss; if(!b||!b.frz||!bombFx){ _dBs(); return; } const k=vibK(), jx=(Math.random()-.5)*k*14, jy=(Math.random()-.5)*k*14, t0=t; t=b.frz.t; ctx.save(); ctx.translate(jx,jy); try{ _dBs(); } finally { ctx.restore(); t=t0; } };
 const _up=update, _dr=draw, _de=drawEnding, _es=enStaff, _er=enRetro;
 enStaff=function(lt){ const o=MK.stOff||0; return _es(lt+o); };   // INFERNO：文字だけ先に進めて、白の中からすぐスタッフロール
@@ -5599,6 +5604,38 @@ function bossHitTick(){ const H2=MK.bh; if(!H2)return; const b=H2.b; if(!boss||b
   if(H2.f>60) MK.bh=null; }
 const _reset=reset; reset=function(){ MK.seq=null; MK.defer=[]; MK.over=null; MK.bh=null; MK.stOff=0; document.body.classList.remove('mkWhite'); return _reset.apply(this,arguments); };
 (function(){ const st=document.createElement('style'); st.textContent='body.mkWhite #hud,body.mkWhite #formBar{visibility:hidden!important}'; document.head.appendChild(st); })();
+})();
+
+
+// ================= INFERNO選択中のタイトル演出（B 侵食＋C 警報） =================
+(function(){
+const lat=[]; let lastBeat=0;
+function vign(col,a){ const g=ctx.createRadialGradient(W/2,H/2,H*.35,W/2,H/2,W*.62); g.addColorStop(0,'rgba(0,0,0,0)'); g.addColorStop(1,`rgba(${col},${a})`); ctx.fillStyle=g; ctx.fillRect(0,0,W,H); }
+function infTitleFx(){
+  // B：画面の端から異常型プリオンの結晶が伸び、鼓動のように赤く脈打つ
+  if(!lat.length) for(let i=0;i<46;i++){ const side=i%4, u=Math.random(); lat.push({x:side===0?0:side===1?W:u*W,y:side===2?0:side===3?H:u*H,a:side===0?0:side===1?Math.PI:side===2?Math.PI/2:-Math.PI/2,len:0,max:80+Math.random()*180,sp:.3+Math.random()*.6,off:(Math.random()-.5)*1.2}); }
+  const pulse=Math.pow(Math.max(0,Math.sin(t*.05)),6);
+  lat.forEach(l=>{ l.len=Math.min(l.max,l.len+l.sp); if(l.len>=l.max&&Math.random()<.002)l.len=0; const a=l.a+l.off, x2=l.x+Math.cos(a)*l.len, y2=l.y+Math.sin(a)*l.len;
+    ctx.strokeStyle=`rgba(${180+75*pulse},40,70,${.55+.4*pulse})`; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(l.x,l.y); ctx.lineTo(x2,y2); ctx.stroke();
+    ctx.lineWidth=1.5; for(let k=1;k<4;k++){ const px=l.x+Math.cos(a)*l.len*k/4, py=l.y+Math.sin(a)*l.len*k/4, bl=l.len*.25, s=k%2?1:-1; ctx.beginPath(); ctx.moveTo(px,py); ctx.lineTo(px+Math.cos(a+.7*s)*bl,py+Math.sin(a+.7*s)*bl); ctx.stroke(); } });
+  vign(`${120+120*pulse},0,20`,.5+.3*pulse);
+  if(pulse>.9&&t-lastBeat>60){ lastBeat=t; if(ac&&!demo){ ftone(55,.25,'sine',.2,30); ftone(46,.22,'sine',.12,28,.22); } }
+  // C：サイレンの赤い光が画面を横切り、上下に警告帯が流れる
+  const sw=(t*.03)%(Math.PI*2), cx=W/2+Math.cos(sw)*W*.6, g=ctx.createRadialGradient(cx,H*.5,0,cx,H*.5,W*.5); g.addColorStop(0,'rgba(255,20,20,.24)'); g.addColorStop(1,'rgba(255,0,0,0)'); ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+  [[0,1,34],[H-10,-1,10]].forEach(([y,d,bh])=>{ ctx.fillStyle='rgba(20,0,0,.85)'; ctx.fillRect(0,y,W,bh); ctx.save(); ctx.beginPath(); ctx.rect(0,y,W,bh); ctx.clip(); ctx.fillStyle='rgba(255,40,20,.9)';
+    const o=(t*1.5*d)%40; for(let x=-80;x<W+80;x+=40){ ctx.beginPath(); ctx.moveTo(x+o,y); ctx.lineTo(x+o+20,y); ctx.lineTo(x+o,y+34); ctx.lineTo(x+o-20,y+34); ctx.fill(); } ctx.restore();
+    if(bh<34)return;
+    ctx.fillStyle='rgba(20,0,0,.9)'; ctx.fillRect(W/2-190,y+5,380,24); ctx.fillStyle=Math.floor(t/20)%2?'#ff3b1f':'#ffd0c0'; ctx.font="20px 'VT323',monospace"; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText('!! WARNING  ::  INFERNO PROTOCOL  ::  WARNING !!',W/2,y+18); }); ctx.textBaseline='alphabetic'; }
+let on=false;
+const _dt=drawTitle; drawTitle=function(){ _dt(); const inf=isInf(); if(inf!==on){ on=inf; document.body.classList.toggle('infTitle',inf); if(!inf)lat.length=0; } if(inf){ ctx.save(); infTitleFx(); ctx.restore(); } };
+setInterval(()=>{ if(on&&state!=='title'){ on=false; document.body.classList.remove('infTitle'); lat.length=0; } },200);
+const st=document.createElement('style'); st.textContent=`
+body.infTitle .tk,body.infTitle .tpp{color:#ff5a6a} body.infTitle .tly{color:#fff;text-shadow:-.05em 0 rgba(255,0,40,.95),.05em 0 rgba(255,180,0,.45),0 0 22px rgba(255,20,80,.6)}
+body.infTitle .tl{animation:infGlitch 1.2s infinite} body.infTitle .tcur{background:#ff2a3a} body.infTitle .tsub{color:#ff6a70}
+body.infTitle #screen{background:radial-gradient(ellipse at center,rgba(40,0,5,.25),rgba(8,0,2,.72))!important}
+@keyframes infGlitch{0%,86%,100%{transform:none}88%{transform:translate(4px,-1px) skewX(-8deg)}90%{transform:translate(-5px,1px)}92%{transform:translate(2px,0) skewX(6deg)}}`;
+document.head.appendChild(st);
 })();
 
 </script>

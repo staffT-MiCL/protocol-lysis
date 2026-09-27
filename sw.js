@@ -1,6 +1,6 @@
 // GaaaaaaS VADER Ⅱ Service Worker
 // ゲームを更新したら CACHE の番号を上げてください（例: v2 → v3）。
-const CACHE = 'vader2-v38';
+const CACHE = 'vader2-v39';
 const CORE = ['./', './index.html', './manifest.json',
   './icons/icon-192.png', './icons/icon-512.png', './icons/icon-maskable-512.png', './icons/apple-touch-icon.png'];
 
