@@ -135,6 +135,13 @@
   #screen h1 .sub{display:block;font-size:.42em;color:var(--plasma);letter-spacing:.3em;margin-top:6px;text-shadow:none}
   #screen{background:radial-gradient(ellipse at center,rgba(40,8,60,.35),rgba(5,2,26,.72))}
   #lzBtn.on{background:#b8fff0!important;color:#04120c!important;border-color:#b8fff0!important}
+  /* スキップ／次へ：誤タッチを防ぐため、画面右下のこのボタンだけが反応する */
+  #skipBtn{position:fixed;right:max(10px,env(safe-area-inset-right));bottom:max(10px,env(safe-area-inset-bottom));z-index:26;min-width:150px;min-height:48px;padding:8px 18px;box-sizing:border-box;
+    font:inherit;font-size:15px;letter-spacing:.08em;color:rgba(200,192,240,.9);background:rgba(10,4,30,.55);border:1.5px solid rgba(143,134,184,.7);border-radius:10px;cursor:pointer;touch-action:manipulation}
+  #skipBtn.hidden{display:none}
+  #skipBtn .bl{animation:skBlink 1.35s steps(1) infinite}
+  @keyframes skBlink{50%{opacity:.35}}
+  #skipBtn.hit{background:rgba(62,242,208,.85);color:#05021a;border-color:#3ef2d0;box-shadow:0 0 18px rgba(62,242,208,.8)}
   #loopTag{position:fixed;left:8px;bottom:6px;z-index:25;pointer-events:none;font-size:13px;letter-spacing:.1em;color:#ffd23e;text-shadow:0 0 6px #000,0 0 2px #000}
   #loopTag.hidden{display:none}
   #autoBtn.on{background:#ffd23e!important;color:#04120c!important;border-color:#ffd23e!important}
@@ -293,6 +300,7 @@
   <button id="diffBadge" class="d-NORMAL" aria-label="現在の難易度">NORMAL</button>
   <div id="dbgToast" class="hidden"></div>
   <div id="loopTag" class="hidden"></div>
+  <button id="skipBtn" class="hidden" aria-label="スキップ"></button>
   <button id="volBtn" aria-label="設定"><svg class="ic" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
   <div id="volPanel" class="hidden">
     <button id="cfgClose" aria-label="閉じる">×</button>
@@ -3783,7 +3791,7 @@ function drawExplain(f,E){
   ctx.fillStyle='#fff6ee'; ctx.font='40px DotGothic16'; ctx.fillText(E.title,W/2,152);
   ctx.font='21px DotGothic16'; ctx.fillStyle='#e9e4ff';
   E.lines.forEach((s,i)=>{ ctx.globalAlpha=a*clamp((f-30-i*25)/20,0,1); ctx.fillText(s,W/2,215+i*38); });
-  ctx.globalAlpha=a*(.5+.5*Math.sin(t*.1))*(f>60?1:0); ctx.fillStyle=E.c; ctx.font='15px DotGothic16'; ctx.fillText('クリック / タップ / スペースで進む',W/2,420);
+  ctx.globalAlpha=a*(.5+.5*Math.sin(t*.1))*(f>60?1:0); ctx.fillStyle=E.c; ctx.font='15px DotGothic16'; ctx.fillText('右下の NEXT ／ スペースキーで進む',W/2,420);
   ctx.globalAlpha=1;
 }
 function startStage(n,mid){
@@ -3865,7 +3873,23 @@ function demoAI(){
 }
 // オートプレイのLYSOZYME：どの向きに逃げても危ないときに使う／2つ以上持っていればボス戦で1つ使う（1つはピンチ用に残す）
 let _loopTxt='';
-function updLoopTag(){ const on=autoPlay&&!demo&&!['title','over'].includes(state), tx=on?'AUTO LOOP '+autoLoop:''; if(tx!==_loopTxt){ _loopTxt=tx; const e=$('loopTag'); e.textContent=tx; e.classList.toggle('hidden',!on); } }
+let _skipMode='';
+function skipModeNow(){   // 今の画面で右下のボタンが何をするか（''なら出さない）
+  if(demo)return '';
+  if(state==='opening'&&op&&op.t<OP_L1+OP_LA-30)return 'SKIP';
+  if(state==='ending'&&en){ if(en.sc===6)return en.lt>60?'NEXT':''; return en.skip?'SKIP':''; }
+  if(state==='special'&&sp&&sp.t>=20)return 'NEXT';
+  if(state==='warp'&&warp&&warp.phase===3&&!warp.shop&&warp.f>60)return 'NEXT';
+  return ''; }
+function updSkipBtn(){ const m=skipModeNow(); if(m===_skipMode)return; _skipMode=m; const b=$('skipBtn');
+  b.classList.toggle('hidden',!m); if(m) b.innerHTML='<span class="bl">TAP / SPACE : '+m+' ▶</span>'; }
+$('skipBtn').addEventListener('pointerdown',e=>{ e.stopPropagation(); e.preventDefault(); const b=$('skipBtn'); b.classList.add('hit'); setTimeout(()=>b.classList.remove('hit'),160);
+  if(state==='opening') skipOpening();
+  else if(state==='ending') skipEnding();
+  else if(state==='special') tapSpecial();
+  else if(state==='warp'&&warp&&warp.phase===3&&warp.f>60) warp.tap=true; });
+$('skipBtn').addEventListener('touchstart',e=>e.stopPropagation(),{passive:true});
+function updLoopTag(){ updSkipBtn(); const on=autoPlay&&!demo&&!['title','over'].includes(state), tx=on?'AUTO LOOP '+autoLoop:''; if(tx!==_loopTxt){ _loopTxt=tx; const e=$('loopTag'); e.textContent=tx; e.classList.toggle('hidden',!on); } }
 function autoBomb(minDang){ if(bombFx||player.dead||player.enter||player.inv>0||t<autoBombT)return;
   const n=bombs+(lzInf?1:0); if(n<=0)return;
   const near=eBullets.filter(b=>!b.dead&&Math.hypot(b.x-player.x,b.y-player.y)<70).length+enemies.filter(e=>!e.dead&&!e.hide&&!e.harmless&&Math.hypot(e.x-player.x,e.y-player.y)<70).length;
@@ -4835,7 +4859,7 @@ function startOpening(){ demo=false; $('demoTag').classList.add('hidden'); initA
 function endOpening(){ if(state!=='opening')return; op=null; beginGame(1); }
 function skipOpening(){ if(!op)return; if(op.t<OP_L1){ op.t=OP_L1; sfx.opGlitch(); } else if(op.t<OP_L1+OP_LA-30) op.t=OP_L1+OP_LA-30; }   // 1回目：出撃シーンへ／2回目：閃光へ
 addEventListener('keydown',e=>{ if(state==='opening'&&(e.key===' '||e.key==='Enter'||e.key==='Escape')&&!e.repeat){ e.preventDefault(); skipOpening(); } });
-addEventListener('pointerdown',()=>{ if(state==='opening') skipOpening(); });
+
 // ---- 効果音（決まったフレームで鳴らす） ----
 function opSE(){ const t0=op.t, B=OP_B1, L=OP_L1;
   if(t0===150||t0===180||t0===210) sfx.opAlarm();
@@ -4954,7 +4978,7 @@ function drawOpening(){ ctx.save(); ctx.setTransform(RS,0,0,RS,0,0); ctx.fillSty
   if(op.t<OP_B1) opBriefing(); else if(op.t<OP_L1) opBootlog(); else opLaunch();
   if(Math.abs(op.t-OP_B1)<14) opGlitch(1-Math.abs(op.t-OP_B1)/14); if(Math.abs(op.t-OP_L1)<10) opGlitch(1-Math.abs(op.t-OP_L1)/10); if(Math.random()<.004&&op.t<OP_L1) opGlitch(.4);
   const v=ctx.createRadialGradient(W/2,H/2,H*.3,W/2,H/2,H*.9); v.addColorStop(0,'rgba(0,0,0,0)'); v.addColorStop(1,'rgba(0,0,0,.55)'); ctx.fillStyle=v; ctx.fillRect(0,0,W,H);
-  if(op.t<OP_L1+OP_LA-30&&Math.floor(op.t/40)%2===0) opTxt(op.t<OP_L1?'SPACE / TAP : SKIP':'',W-30,H-18,16,'rgba(143,134,184,.8)','right');
+  
   ctx.restore(); opSE(); op.t++; if(op.t>=OP_END) endOpening(); }
 
 
@@ -5020,7 +5044,7 @@ function updateEnding(){ en.t++; t++; const [sc,lt]=enScene(); en.sc=sc; en.lt=l
 function fadeBgm8(sec){ if(!ac||!bgmGain)return; const n=ac.currentTime; bgmGain.gain.cancelScheduledValues(n); bgmGain.gain.setValueAtTime(bgmGain.gain.value,n); bgmGain.gain.linearRampToValueAtTime(0,n+sec); }
 function unfadeBgm8(){ if(!ac||!bgmGain)return; bgmGain.gain.cancelScheduledValues(ac.currentTime); applyVolume(); }   // フェードの予約を取り消して音量を戻す
 function skipEnding(){ if(!en)return; const [sc]=enScene(); if(sc===6){ if(en.lt>60)endEnding(); return; } if(en.skip){ en.t=EN_SCN().reduce((a,b)=>a+b,0); } }
-addEventListener('pointerdown',()=>{ if(state==='ending')skipEnding(); });
+
 addEventListener('keydown',e=>{ if(state==='ending'&&(e.key===' '||e.key==='Enter'||e.key==='Escape')&&!e.repeat){ e.preventDefault(); skipEnding(); } });
 function endEnding(){ unfadeBgm8(); const unl=en&&en.unlockNew, inf=en&&en.infDone; en=null; op=null; neuroHeal=0; vac8Grow=0; boss=null;
   if(unl){ startSpecial('unlock'); return; }      // HARDクリア：INFERNO解禁の演出へ
@@ -5054,7 +5078,7 @@ function endSpecial(){ const k=sp&&sp.kind; sp=null;
 function tapSpecial(){ if(!sp||sp.t<20)return;
   if(sp.kind==='unlock'){ if(sp.t<SP_MED){ sp.t=SP_MED; return; } if(sp.typedAt>=0&&sp.t>sp.typedAt+30) endSpecial(); else if(sp.typedAt<0){ sp.n=[...sp.line].length; } return; }
   if(sp.t<300){ sp.t=300; return; } endSpecial(); }
-addEventListener('pointerdown',()=>{ if(state==='special')tapSpecial(); });
+
 addEventListener('keydown',e=>{ if(state==='special'&&(e.key===' '||e.key==='Enter'||e.key==='Escape')&&!e.repeat){ e.preventDefault(); tapSpecial(); } });
 function updateSpecial(){ const S=sp; S.t++; t++; if(autoPlay&&S.kind==='complete'&&S.t>=300+240&&!S.autoEnd){ S.autoEnd=true; setTimeout(()=>{ if(state==='special'&&sp)endSpecial(); },0); }   // オートプレイ：4秒後に次へ
   if(S.shake>0)S.shake--; if(S.flash>0)S.flash--;
@@ -5120,7 +5144,7 @@ function drawEnding(){ const [sc,lt]=[en.sc,en.lt]; ctx.save(); ctx.setTransform
   if(sc>=1&&sc<=3){ ctx.fillStyle='#03010a'; ctx.fillRect(0,0,W,H); }   // 報告画面は毎回塗り直す
   if(sc===0) enTalkScene(lt); else if(sc===1) enReport(lt); else if(sc===2) enLog(lt); else if(sc===3) enNext(lt); else if(sc===4) enDive(lt); else if(sc===5) enStaff(lt); else enResult(lt);
   const fin=[en.A,en.B1,en.B2,en.cEnd,en.D,en.E][sc]; if(sc<5&&sc!==4&&sc!==2){ if(lt<30){ ctx.fillStyle=`rgba(0,0,0,${1-lt/30})`; ctx.fillRect(0,0,W,H); } if(fin-lt<30&&fin-lt>=0){ ctx.fillStyle=`rgba(0,0,0,${1-(fin-lt)/30})`; ctx.fillRect(0,0,W,H); } }
-  if(en.skip&&sc<6&&Math.floor(t/40)%2===0) enText('TAP / SPACE : SKIP',W-24,H-14,14,'rgba(170,160,210,.8)','right');
+  
   ctx.restore(); }
 function enTalkScene(lt){ const s0=stage; stage=8; drawNeuroBg(); drawTissue(true); drawTissue(false); stage=s0;
   const bx=en.shipX, by=en.shipY; if(t%3===0) particles.push({x:bx-22,y:by+(Math.random()-.5)*4,vx:-1.2,vy:(Math.random()-.5)*.3,life:40,c:SHIP_PAL[en.tier].pt});
@@ -5490,7 +5514,7 @@ document.addEventListener('click',e=>{ const b=menuBtn(e); if(!b)return;
 document.querySelectorAll('#formBar button').forEach(b=>{ b.addEventListener('pointerdown',e=>{ e.stopPropagation(); e.preventDefault(); if(b.id==='bombBtn') useBomb(); else pickFormation(b.dataset.f); });
   b.addEventListener('touchstart',e=>e.stopPropagation(),{passive:true}); });
 addEventListener('keydown',e=>{ const f={z:'spread',x:'focus',c:'freeze'}[e.key.toLowerCase()]; if(f)pickFormation(f); if(e.key.toLowerCase()==='v'&&!e.repeat)useBomb(); });
-addEventListener('pointerdown',()=>{ if(state==='warp'&&warp&&warp.phase===3&&warp.f>60)warp.tap=true; });
+
 addEventListener('keydown',e=>{ if(e.key===' '&&!e.repeat&&state==='warp'&&warp&&warp.phase===3&&warp.f>60)warp.tap=true; });   // 押しっぱなしでは進まない
 // デバッグ（Fキーでオン）中：Bでボス直前へ、Nでステージクリア扱い
 function debugKey(k){ if(!debug||state!=='play'||demo)return;
