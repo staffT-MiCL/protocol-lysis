@@ -135,6 +135,8 @@
   #screen h1 .sub{display:block;font-size:.42em;color:var(--plasma);letter-spacing:.3em;margin-top:6px;text-shadow:none}
   #screen{background:radial-gradient(ellipse at center,rgba(40,8,60,.35),rgba(5,2,26,.72))}
   #lzBtn.on{background:#b8fff0!important;color:#04120c!important;border-color:#b8fff0!important}
+  #loopTag{position:fixed;left:8px;bottom:6px;z-index:25;pointer-events:none;font-size:13px;letter-spacing:.1em;color:#ffd23e;text-shadow:0 0 6px #000,0 0 2px #000}
+  #loopTag.hidden{display:none}
   #autoBtn.on{background:#ffd23e!important;color:#04120c!important;border-color:#ffd23e!important}
   #godBtn.on{background:#ff3d7f!important;color:#fff!important;border-color:#ff3d7f!important}
   #formBar{position:absolute;left:12px;bottom:12px;z-index:4;display:flex;gap:6px;touch-action:none}
@@ -290,6 +292,7 @@
     <div class="row"><button id="contBtn">コンティニュー</button><button id="endBtn" class="sub">終わる</button></div></div>
   <button id="diffBadge" class="d-NORMAL" aria-label="現在の難易度">NORMAL</button>
   <div id="dbgToast" class="hidden"></div>
+  <div id="loopTag" class="hidden"></div>
   <button id="volBtn" aria-label="設定"><svg class="ic" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
   <div id="volPanel" class="hidden">
     <button id="cfgClose" aria-label="閉じる">×</button>
@@ -3564,7 +3567,7 @@ function updateWarp(){
   else if(w.phase===1){ const k=w.f/P1; speed=1.35+(18-1.35)*k*k; w.shipX=300-60*Math.sin(k*Math.PI/2); w.shipY+=(H/2-w.shipY)*.05; }
   else if(w.phase===2){ const k=w.f/P2; speed=18; w.m=clamp((k-.25)/.5,0,1);
     w.bulge=Math.sin(k*Math.PI)*(30+18*Math.sin(t*.25)); w.shipX=240+(W+80-240)*Math.pow(k,1.3); w.shipY=H/2+Math.sin(t*.06)*18*clamp(k*4,0,1); }
-  else { speed=0; if(autoPlay&&w.f>180)w.tap=true; if(w.f>60&&w.tap){ w.go=true; w.f=WL(3); } }   // オートプレイ中は3秒表示してから自動で進む   // 解説画面は、表示から1秒後以降にタップ／スペースを押したときだけ進む
+  else { speed=0; if(autoPlay&&w.f>240)w.tap=true; if(w.f>60&&w.tap){ w.go=true; w.f=WL(3); } }   // オートプレイ中は4秒表示してから自動で進む   // 解説画面は、表示から1秒後以降にタップ／スペースを押したときだけ進む
   if(w.phase<3) scroll+=speed;
   particles.forEach(p=>{p.x+=p.vx;p.y+=p.vy;p.vx*=.96;p.vy*=.96;p.life--;}); particles=particles.filter(p=>p.life>0);
   // 段階0は、セリフの文字送りが終わってから3秒待って進む（最大WARP_HOLD_MAXまで）
@@ -3671,11 +3674,14 @@ function shopHit(x,y){ for(const col of shopItems()) for(const it of col) if(x>=
 const SHOP_MODAL={x:W/2-230,y:H/2-80,w:460,h:170, yes:{x:W/2-130,y:H/2+36,w:110,h:34}, no:{x:W/2+20,y:H/2+36,w:110,h:34}};
 const inR=(x,y,r)=>x>=r.x&&x<=r.x+r.w&&y>=r.y&&y<=r.y+r.h;
 // オートプレイのショップ：BASE（低いものから均等）→ 装備（少ないものから均等）の順に、CREDITが許す限り買う。武器は変えない
-function autoShopPick(){ const col=shopItems().flat(), ok=it=>!shopBlocked(it);
+function autoShopPick(S){ const col=shopItems().flat(), ok=it=>!shopBlocked(it);
   const pick=L=>{ L=L.filter(ok); if(!L.length)return null; return L.reduce((a,b)=>b.lv<a.lv?b:a); };   // レベル（個数）がいちばん低いものから
+  // 1回のショップで：BASEを2回まで → LYSOZYMEが0個なら1つ → BASE → 装備 → SPARE UNIT
+  if((S.autoBaseN||0)<2){ const b=pick(col.filter(it=>it.base)); if(b)return b; }
+  if(bombs<=0){ const lz=pick(col.filter(it=>it.k==='B')); if(lz)return lz; }
   return pick(col.filter(it=>it.base))||pick(col.filter(it=>['A','O','S','B'].includes(it.k)))||pick(col.filter(it=>it.spare)); }   // BASE → 装備 → 残りでSPARE UNIT
 function autoShop(w,S){ if(S.modal||S.t<50||S.t%14)return; if(S.autoEnd){ if(S.t>=S.autoEnd)leaveShop(w); return; }
-  const it=autoShopPick(); if(it){ S.sel=it.k; S.modal={k:it.k}; shopConfirm(true); } else S.autoEnd=S.t+90; }
+  const it=autoShopPick(S); if(it){ if(it.base)S.autoBaseN=(S.autoBaseN||0)+1; S.sel=it.k; S.modal={k:it.k}; shopConfirm(true); } else S.autoEnd=S.t+90; }
 function updateShop(w){ const S=w.shop; S.t++; if(S.fx>0)S.fx--; if(S.fxBig>0)S.fxBig--; if(autoPlay)autoShop(w,S);
   particles.forEach(p=>{p.x+=p.vx;p.y+=p.vy;p.vx*=.96;p.vy*=.96;p.life--;}); particles=particles.filter(p=>p.life>0); }
 // 「現在の自機」パネル：実機の描画で、オプション・シールド・試し撃ちまで表示
@@ -3787,10 +3793,10 @@ function startStage(n,mid){
   player.x=-60; player.y=H/2; player.vx=player.vy=0; player.inv=150; player.dead=0; player.cd=0; player.enter=1; history=[]; optPts=[];
   if(mid8===2){ scroll=Math.round(MID8*SK); events=events.filter(e=>e.x>scroll+W*.6); talkIdx=TALK[8].at.filter(a=>a[0]<=scroll).length; sec8=sec8At((scroll+200)/SK); t=300; }   // 中ボス撃破後から再開
   $('stageName').textContent=STAGES[n].name; state='play'; startGameBGM(); resetFreeze();
-  if(!demo){ setProg(n); saveRun(); }
+  if(!demo&&!autoUsed){ setProg(n); saveRun(); }   // オートプレイを使ったプレイは到達記録・途中経過を残さない
 }
 // CONTINUE用：ステージ開始時点の状態を保存
-function saveRun(shop=false){ if(demo)return; lsSet(LS.run,{stage,score,credit,weapon,optionCount,shield,speedLv,bombs,base:{pw:base.pw,sh:base.sh,mv:base.mv},diff:cfg.diff,lives:cfg.lives,left:lives===Infinity?-1:lives,shop:!!shop,name:playerName,mid:stage===8&&mid8===2,time:playT}); }   // mid：ステージ8後半から再開／time：プレイ時間   // shop=true：ショップ（補給ポイント）で保存。left＝その時点の残機（∞は-1）
+function saveRun(shop=false){ if(demo||autoUsed)return; lsSet(LS.run,{stage,score,credit,weapon,optionCount,shield,speedLv,bombs,base:{pw:base.pw,sh:base.sh,mv:base.mv},diff:cfg.diff,lives:cfg.lives,left:lives===Infinity?-1:lives,shop:!!shop,name:playerName,mid:stage===8&&mid8===2,time:playT}); }   // mid：ステージ8後半から再開／time：プレイ時間   // shop=true：ショップ（補給ポイント）で保存。left＝その時点の残機（∞は-1）
 
 // ---------------- エフェクト ----------------
 function explode(x,y,n=16,color){ for(let i=0;i<n;i++){ const a=Math.random()*Math.PI*2,s=Math.random()*4+1;
@@ -3845,11 +3851,20 @@ function demoAI(){
   for(const mx of [-1,0,1]) for(const my of [-1,0,1]){ const k=mx&&my?.707:1, vx=mx*k*sp, vy=my*k*sp;
     const dang=aiDanger(px,py,vx,vy,N), goal=Math.hypot(mx*k-gx,my*k-gy)*(chasingItem?60:30);
     const c=dang*10+goal; if(c<bestC){ bestC=c; bestD=[mx*k,my*k]; } }
-  let [dx,dy]=bestD;
+  let [dx,dy]=bestD, minDang=1e18;
+  for(const mx of [-1,0,1]) for(const my of [-1,0,1]){ const k=mx&&my?.707:1; minDang=Math.min(minDang,aiDanger(px,py,mx*k*sp,my*k*sp,8)); }
   if(aiDanger(px,py,gx*sp,gy*sp,N)<1){ dx=gx; dy=gy; }   // 危険がなければ目標へなめらかに
   if(px<50)dx=Math.max(dx,.4); if(px>W-160)dx=Math.min(dx,-.2);
-  return {dx,dy};
+  return {dx,dy,minDang};
 }
+// オートプレイのLYSOZYME：どの向きに逃げても危ないときに使う／2つ以上持っていればボス戦で1つ使う（1つはピンチ用に残す）
+let _loopTxt='';
+function updLoopTag(){ const on=autoPlay&&!demo&&!['title','over'].includes(state), tx=on?'AUTO LOOP '+autoLoop:''; if(tx!==_loopTxt){ _loopTxt=tx; const e=$('loopTag'); e.textContent=tx; e.classList.toggle('hidden',!on); } }
+function autoBomb(minDang){ if(bombFx||player.dead||player.enter||player.inv>0||t<autoBombT)return;
+  const n=bombs+(lzInf?1:0); if(n<=0)return;
+  const near=eBullets.filter(b=>!b.dead&&Math.hypot(b.x-player.x,b.y-player.y)<70).length+enemies.filter(e=>!e.dead&&!e.hide&&!e.harmless&&Math.hypot(e.x-player.x,e.y-player.y)<70).length;
+  if(minDang>1500&&near>=2){ useBomb(); autoBombT=t+120; return; }
+  if(state==='boss'&&boss&&!boss.dead&&boss.x<W-60&&bombs>=2&&autoBossBomb!==boss){ autoBossBomb=boss; useBomb(); autoBombT=t+120; } }
 let demoSwitchT=0;
 function demoFormation(){
   if(optionCount<2||player.dead||t<demoSwitchT||fzS.active)return;
@@ -3884,7 +3899,7 @@ function reset(){
   player={x:140,y:H/2,vx:0,vy:0,cd:0,inv:90,dead:0};
 }
 let godMode=false;
-let autoPlay=false, autoUsed=false, lzInf=false;   // lzInf：デバッグ用。LYSOZYMEを何度でも撃てる   // デバッグ用オートプレイ（デモと同じ動き）／このプレイで一度でも使ったらハイスコアに残さない   // デバッグ用：無敵
+let autoPlay=false, autoUsed=false, lzInf=false, autoLoop=1, autoBombT=0, autoBossBomb=null;   // autoLoop：オートプレイの周回数   // lzInf：デバッグ用。LYSOZYMEを何度でも撃てる   // デバッグ用オートプレイ（デモと同じ動き）／このプレイで一度でも使ったらハイスコアに残さない   // デバッグ用：無敵
 function killPlayer(){ if(godMode)return;
   if(player.inv>0||player.dead)return;
   if(shield>0){ shieldPeel={k:Math.min(3,shield)-1,f:0,col:SH_COL[Math.min(3,shield)]}; shield--; player.inv=60; shake=8; sfx.shield(); explode(player.x+5,player.y,14,'#8fd8ff'); updateWeaponHud(); return; }
@@ -3910,7 +3925,7 @@ function update(){
   else{
     const slw=player.slow>0?(player.slow--,.5):1;   // 毒の胞子雲（INFERNO）の中では遅くなる
     const sp=(4.2+curSpeedLv()*0.9)*(1+BASE_RATE*base.mv)*slw; let dx=(keys.ArrowRight||keys.d?1:0)-(keys.ArrowLeft||keys.a?1:0), dy=(keys.ArrowDown||keys.s?1:0)-(keys.ArrowUp||keys.w?1:0);
-    if(demo||autoPlay){ const d=demoAI(); dx=d.dx; dy=d.dy; }
+    if(demo||autoPlay){ const d=demoAI(); dx=d.dx; dy=d.dy; if(autoPlay&&!demo)autoBomb(d.minDang); }
     if(player.enter){ dx=0; dy=0; }
     if(player.stun>0){ player.stun--; dx=0; dy=0; }
     if(dx&&dy){dx*=.707;dy*=.707;}
@@ -4651,7 +4666,7 @@ function tickOnly(){   // 描画なしで1回分だけ進める
   else if(state==='ending'&&en) updateEnding();
   else if(state==='special'&&sp) updateSpecial(); }
 let inShopOn=false, inExplainOn=false;
-function loop(now){ requestAnimationFrame(loop);
+function loop(now){ requestAnimationFrame(loop); updLoopTag();
   now=now||performance.now(); let d=_lastT?now-_lastT:STEP_MS; _lastT=now;
   if(d>250) d=STEP_MS;                       // タブ切替などで長く止まった後は1回分として扱う
   _acc+=d; let n=Math.floor(_acc/STEP_MS); if(n<1) return;
@@ -4706,7 +4721,8 @@ function gameOver(){
   if(demo){ state='clear'; msg={text:'GAME OVER',sub:'',life:120}; setTimeout(()=>{ if(demo){ reset(); state='play'; } },2000); return; }
   state='continue'; stopBGM(); playGameOverBGM(); touch.active=false;
   $('contInfo').textContent='STAGE '+stage+'　SCORE '+score+'（コンティニューするとスコアは0に戻ります）';
-  $('contMenu').classList.remove('hidden'); }
+  $('contMenu').classList.remove('hidden');
+  if(autoPlay) setTimeout(()=>{ if(state==='continue'&&autoPlay)doContinue(); },4000); }   // オートプレイ：4秒後に自動でコンティニュー
 function doContinue(){ $('contMenu').classList.add('hidden'); if(recordHi())hiNote=true;
   score=0; lives=cfg.lives===0?Infinity:cfg.lives; optionCount=0; weapon='NORMAL'; shield=0; speedLv=0; allies=[]; updateWeaponHud();   // CREDITは0にしない   // 基礎性能はコンティニューしても残る
   const mid=stage===8&&mid8===2; boss=null; bombFx=null; bullets=[]; eBullets=[]; enemies=[]; items=[]; particles=[]; resetTalk();
@@ -4967,12 +4983,13 @@ function playTimeStr(f){ const s=Math.floor(f/60), h=Math.floor(s/3600), m=Math.
 function startEnding(){ stopBGM(); state='ending'; msg=null; eBullets=[]; enemies=[]; items=[]; allyItems=[]; resetTalk(); lsDel(LS.run);
   const prev=lsGet(LS_CLEAR,null), lifeB=lives===Infinity?0:Math.max(lives,0)*1000, clearB=Math.round(50000*DIFF[cfg.diff].pts);
   score+=lifeB+clearB; credit+=lifeB+clearB; const newHi=recordHi(); hiNote=newHi;
-  lsSet(LS_CLEAR,{count:(prev&&prev.count||0)+1,bestScore:Math.max(score,prev&&prev.bestScore||0),diff:cfg.diff,lives:cfg.lives,date:new Date().toLocaleDateString('ja-JP')});
-  const unlockNew=!demo&&cfg.diff==='HARD'&&!infOpen(); if(!demo&&cfg.diff==='HARD') lsSet(LS_INF,true);   // HARDでステージ8をクリア → INFERNO解禁
+  const rec=!demo&&!autoUsed;   // オートプレイを使ったプレイはクリア記録・INFERNO解禁に反映しない
+  if(rec) lsSet(LS_CLEAR,{count:(prev&&prev.count||0)+1,bestScore:Math.max(score,prev&&prev.bestScore||0),diff:cfg.diff,lives:cfg.lives,date:new Date().toLocaleDateString('ja-JP')});
+  const unlockNew=rec&&cfg.diff==='HARD'&&!infOpen(); if(rec&&cfg.diff==='HARD') lsSet(LS_INF,true);   // HARDでステージ8をクリア → INFERNO解禁
   en={t:0,sc:0,st:0,skip:!!prev,unlockNew,lifeB,clearB,newHi,tier:shipTier(),shipX:player.x,shipY:player.y,time:playT,op:{t:0,typing:false,tz:0},stars:Array.from({length:140},()=>({x:Math.random()*W,y:Math.random()*H,z:.2+Math.random()*.8}))};
   let c=150; en.talk=EN_TALK.map(([p,s])=>{ c+=p?120:40; const st=c, n=[...withDr(s)].length, dur=n/EN_TS; c=st+dur+170; return {s:withDr(s),st,dur,end:c}; }); en.A=c+80;
   en.stampT=Math.round(repEnd8()+50); en.B1=en.stampT+300;   /* 報告文を打ち終えて約1秒後に決裁スタンプ、その後5秒待つ */ en.logEnd=150+EN_LOG.length*58+240; en.B2=en.logEnd+EN_TR+EN_HOLD+EN_INC;   /* ログのあとに通信切り替えのトランジション */ en.cEnd=1080; en.C=en.cEnd+EN_GAP;   /* 依頼画面のあと、出撃まで少し間を空ける */ en.D=320; staffTiming(); 
-  if(isInf()&&!demo){ const ip=lsGet(LS_INFCLR,null); lsSet(LS_INFCLR,{count:(ip&&ip.count||0)+1,bestScore:Math.max(score,ip&&ip.bestScore||0),date:new Date().toLocaleDateString('ja-JP')});
+  if(isInf()&&!demo){ const ip=lsGet(LS_INFCLR,null); if(rec) lsSet(LS_INFCLR,{count:(ip&&ip.count||0)+1,bestScore:Math.max(score,ip&&ip.bestScore||0),date:new Date().toLocaleDateString('ja-JP')});
     en.infDone=true; en.A=en.B1=en.B2=en.C=en.D=0; }   // INFERNO：会話・報告・次の依頼・突入を飛ばして、すぐスタッフロールへ
   $('hud').classList.add('hidden'); $('test').classList.add('hidden'); neuroHeal=Math.max(neuroHeal,.35); if(!en.infDone) setTimeout(()=>{ if(state==='ending')startEndingBGM(); },900); }
 const EN_SCN=()=>[en.A,en.B1,en.B2,en.C,en.D,en.E];
@@ -4991,6 +5008,7 @@ function updateEnding(){ en.t++; t++; const [sc,lt]=enScene(); en.sc=sc; en.lt=l
   if(sc===5&&!en.snaps) makeRetroSnaps();
   // スタッフロールの振り返りは無音（1枚ごとの効果音が射撃音のように聞こえるため鳴らさない）
   if(sc===6&&lt===0){ sfx.opReady(); }
+  if(sc===6&&autoPlay&&lt>=240&&!en.autoEnd){ en.autoEnd=true; setTimeout(()=>{ if(state==='ending'&&en)endEnding(); },0); }   // オートプレイ：リザルトを4秒表示して次へ
   if(sc>=3&&currentBgmType!=='ending2'){ stopBGM(); unfadeBgm8(); startEndingBGM2(); }   // 次の依頼 → 突入 → スタッフロール：爽快な曲   // 依頼画面からリザルトまで同じ曲
   }        // リザルト：最初のエンディング曲に戻す
 function fadeBgm8(sec){ if(!ac||!bgmGain)return; const n=ac.currentTime; bgmGain.gain.cancelScheduledValues(n); bgmGain.gain.setValueAtTime(bgmGain.gain.value,n); bgmGain.gain.linearRampToValueAtTime(0,n+sec); }
@@ -5002,7 +5020,8 @@ function endEnding(){ unfadeBgm8(); const unl=en&&en.unlockNew, inf=en&&en.infDo
   if(unl){ startSpecial('unlock'); return; }      // HARDクリア：INFERNO解禁の演出へ
   if(inf){ startSpecial('complete'); return; }    // INFERNOクリア：MISSION COMPLETEの演出へ
   toTitleAfterClear(); }
-function toTitleAfterClear(){ const s=score;  op=null; neuroHeal=0; vac8Grow=0; boss=null; state='over';
+function toTitleAfterClear(){ if(autoPlay){ autoLoop++; op=null; neuroHeal=0; vac8Grow=0; boss=null; startOpening(); return; }   // オートプレイ：同じ難易度でNEW GAMEから次の周回へ
+  const s=score;  op=null; neuroHeal=0; vac8Grow=0; boss=null; state='over';
   showScreen(TITLE_HTML,'PC：矢印キー／WASDで移動、スペースで発射、Z／X／Cでフォーメーション<br>スマホ：画面をドラッグで移動（押している間は自動連射）','NEW GAME');
   $('subLine').innerHTML+='<br><span style="color:#9fe8ff">'+STAR_SVG+' ALL CLEAR ── FINAL SCORE '+s.toLocaleString()+'</span>'; saveScore(); }
 // ================= 特別演出：INFERNO解禁（HARDクリア後）／MISSION COMPLETE（INFERNOクリア後） =================
@@ -5031,7 +5050,8 @@ function tapSpecial(){ if(!sp||sp.t<20)return;
   if(sp.t<300){ sp.t=300; return; } endSpecial(); }
 addEventListener('pointerdown',()=>{ if(state==='special')tapSpecial(); });
 addEventListener('keydown',e=>{ if(state==='special'&&(e.key===' '||e.key==='Enter'||e.key==='Escape')&&!e.repeat){ e.preventDefault(); tapSpecial(); } });
-function updateSpecial(){ const S=sp; S.t++; t++; if(S.shake>0)S.shake--; if(S.flash>0)S.flash--;
+function updateSpecial(){ const S=sp; S.t++; t++; if(autoPlay&&S.kind==='complete'&&S.t>=300+240&&!S.autoEnd){ S.autoEnd=true; setTimeout(()=>{ if(state==='special'&&sp)endSpecial(); },0); }   // オートプレイ：4秒後に次へ
+  if(S.shake>0)S.shake--; if(S.flash>0)S.flash--;
   if(S.kind==='unlock'){ const T=S.t;
     if(T>=20&&T<62&&(T-20)%17===0) sfx.opPing(1);   // 心電図の拍動音
     if(T===62){ sfx.opGlitch(); S.shake=24; } if(T===72||T===82) sfx.opGlitch();
@@ -5486,7 +5506,7 @@ let dbgCol=!!lsGet('gv2_dbgcol',false);
 function applyDbgCol(){ $('test').classList.toggle('col',dbgCol); $('dbgTog').textContent=dbgCol?'DEBUG 表示':'非表示'; }
 function toggleDbg(){ dbgCol=!dbgCol; lsSet('gv2_dbgcol',dbgCol); applyDbgCol(); }
 applyDbgCol();
-function setAuto(on){ autoPlay=on; if(on)autoUsed=true; const b=$('autoBtn'); b.textContent='AUTO '+(on?'ON':'OFF'); b.classList.toggle('on',on); }
+function setAuto(on){ autoPlay=on; if(on)autoLoop=1; if(on)autoUsed=true; const b=$('autoBtn'); b.textContent='AUTO '+(on?'ON':'OFF'); b.classList.toggle('on',on); }
 function testPick(el){ if(!el)return; if(el.dataset.tog){ toggleDbg(); return; } if(el.dataset.st){ debugJump(+el.dataset.st); return; } if(el.dataset.dk){ debugKey(el.dataset.dk); return; }
   if(el.dataset.b){ const k=el.dataset.b; if(base[k]<BASE_MAX[k]){ base[k]++; sfx.item(); } updBaseInfo(); return; }   // 基礎性能を1段階上げる（機体デザインも変わる）
   if(el.dataset.br){ base.pw=base.sh=base.mv=0; sfx.item(); updBaseInfo(); return; }   // 基礎性能を0に戻す
