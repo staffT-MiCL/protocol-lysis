@@ -102,6 +102,7 @@
   #hudVol{display:none!important}
   #volPanel.inPause{position:static;margin:0;text-align:left;box-shadow:none}
   #volPanel.inPause #volHint,#volPanel.inPause h3{display:none}
+  #pauseMenu #volPanel .cbtn{font-size:12px;padding:3px 8px;border-radius:5px;border-width:1px}   /* ポーズ画面の中でも小さいボタンのまま */
   #pauseMenu{gap:12px}
   @media (max-height:460px){ #pauseMenu h2{font-size:34px} #pauseMenu{gap:8px} #pauseMenu > p{display:none} #pauseMenu .row button{font-size:16px;padding:7px 18px} }
   #volPanel.ingame .cfgOnly{display:none}
@@ -149,11 +150,16 @@
   #loopTag.hidden{display:none}
   #autoBtn.on{background:#ffd23e!important;color:#04120c!important;border-color:#ffd23e!important}
   #godBtn.on{background:#ff3d7f!important;color:#fff!important;border-color:#ff3d7f!important}
-  #formBar{position:absolute;left:12px;bottom:12px;z-index:4;display:flex;gap:6px;touch-action:none}
-  #formBar button{position:relative;overflow:hidden;font:inherit;font-size:14px;letter-spacing:.06em;padding:8px 12px;border-radius:9px;cursor:pointer;background:rgba(6,2,22,.72);color:var(--dim);border:1px solid var(--dim);touch-action:none}
+  #formBar{position:absolute;left:12px;bottom:12px;z-index:4;display:flex;flex-wrap:nowrap;gap:5px;touch-action:none;white-space:nowrap}
+  #formBar button{position:relative;overflow:hidden;flex:none;font:inherit;font-size:13px;letter-spacing:.04em;padding:7px 9px;border-radius:9px;cursor:pointer;background:rgba(6,2,22,.72);color:var(--dim);border:1px solid var(--dim);touch-action:none}
   #formBar button.on{color:#04120c;background:var(--plasma);border-color:var(--plasma)}
   #formBar button small{font-size:10px;opacity:.7;margin-left:4px}
-  #formBar #bombBtn{margin-left:14px;color:#c9fff4;border-color:rgba(62,242,208,.7);display:flex;align-items:center;gap:6px}
+  #formBar #cusBtn.dis{opacity:.28;cursor:not-allowed}
+  body.inCust #hud,body.inCust #formBar{visibility:hidden}
+  #custOv{position:fixed;inset:0;z-index:30;background:#05020f;touch-action:none}
+  #custOv.hidden{display:none}
+  #custOv canvas{display:block;width:100%;height:100%}
+  #formBar #bombBtn{margin-left:12px;color:#c9fff4;border-color:rgba(62,242,208,.7);display:flex;align-items:center;gap:6px}
   #formBar #bombBtn.empty{opacity:.4}
   #bombPips{display:inline-flex;gap:4px;margin-left:2px}
   #bombPips i{width:8px;height:8px;border:1px solid #3ef2d0;transform:rotate(45deg)}
@@ -281,7 +287,7 @@
     <button id="pauseBtn" aria-label="一時停止"><svg class="ic" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1" fill="currentColor"/><rect x="14" y="5" width="4" height="14" rx="1" fill="currentColor"/></svg></button>
     <button id="hudVol" aria-label="設定"><svg class="ic" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor"/><path d="M16.5 8.5a5 5 0 0 1 0 7"/><path d="M19 6a8.5 8.5 0 0 1 0 12"/></svg></button>
   </div>
-  <div id="formBar"><button data-f="spread">SPREAD<small>Z</small></button><button data-f="focus">FOCUS<small>X</small></button><button data-f="freeze">FREEZE<small>C</small><i class="gauge" id="fzGauge"></i></button><button id="bombBtn" aria-label="LYSOZYME">LYSOZYME<small>V</small><span id="bombPips"></span></button></div>
+  <div id="formBar"><button data-f="spread">SPREAD<small>Z</small></button><button data-f="focus">FOCUS<small>X</small></button><button data-f="freeze">FREEZE<small>C</small><i class="gauge" id="fzGauge"></i></button><button data-f="custom" id="cusBtn" class="dis" aria-label="CUSTOM（ショップで設定すると使えます）">CUSTOM<small>B</small></button><button id="bombBtn" aria-label="LYSOZYME">LYSOZYME<small>V</small><span id="bombPips"></span></button></div>
   <div id="test" class="hidden" data-debug="1">
     <span>武器テスト</span>
     <button data-w="NORMAL">N</button><button data-w="D">D</button><button data-w="W">W</button><button data-w="T">T</button>
@@ -301,6 +307,7 @@
   <div id="contMenu" class="ovl hidden"><h2>CONTINUE?</h2><p id="contInfo"></p>
     <div class="row"><button id="contBtn">コンティニュー</button><button id="endBtn" class="sub">終わる</button></div></div>
   <button id="diffBadge" class="d-NORMAL" aria-label="現在の難易度">NORMAL</button>
+  <div id="custOv" class="hidden"><canvas id="custCv"></canvas></div>
   <div id="dbgToast" class="hidden"></div>
   <div id="loopTag" class="hidden"></div>
   <div id="loopAsk" class="ovl hidden"><h2 style="font-size:30px">オートプレイを終了しますか？</h2>
@@ -3696,7 +3703,7 @@ function autoShopPick(S){ const col=shopItems().flat(), ok=it=>!shopBlocked(it);
   return pick(col.filter(it=>it.base))||pick(col.filter(it=>['A','O','S','B'].includes(it.k)))||pick(col.filter(it=>it.spare)); }   // BASE → 装備 → 残りでSPARE UNIT
 function autoShop(w,S){ if(S.modal||S.t<50||S.t%14)return; if(S.autoEnd){ if(S.t>=S.autoEnd)leaveShop(w); return; }
   const it=autoShopPick(S); if(it){ if(it.base)S.autoBaseN=(S.autoBaseN||0)+1; S.sel=it.k; S.modal={k:it.k}; shopConfirm(true); } else S.autoEnd=S.t+90; }
-function updateShop(w){ const S=w.shop; S.t++; if(S.fx>0)S.fx--; if(S.fxBig>0)S.fxBig--; if(autoPlay)autoShop(w,S);
+function updateShop(w){ const S=w.shop; S.t++; if(S.fx>0)S.fx--; if(S.fxBig>0)S.fxBig--; if(autoPlay&&!S.cust)autoShop(w,S);
   particles.forEach(p=>{p.x+=p.vx;p.y+=p.vy;p.vx*=.96;p.vy*=.96;p.life--;}); particles=particles.filter(p=>p.life>0); }
 // 「現在の自機」パネル：実機の描画で、オプション・シールド・試し撃ちまで表示
 function drawShopShip(S){ const px=640,py=150,pw=W-24-640,ph=220, cx=px+pw*.42, cy=py+ph/2+Math.sin(t*.04)*8, K=1.7;
@@ -3709,6 +3716,119 @@ function drawShopShip(S){ const px=640,py=150,pw=W-24-640,ph=220, cx=px+pw*.42, 
   if(S.fx>0){ ctx.strokeStyle=`rgba(255,210,62,${S.fx/30})`; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(cx,cy,80-S.fx*1.5,0,7); ctx.stroke(); }
   if(S.fxBig>0){ ctx.strokeStyle=shipTier()===4?`rgba(255,40,60,${S.fxBig/50})`:`rgba(255,255,255,${S.fxBig/50})`; ctx.lineWidth=4; ctx.beginPath(); ctx.arc(cx,cy,150-S.fxBig*2.5,0,7); ctx.stroke(); }
   ctx.restore(); }
+const FC_BTN={x:640+296-172,y:158,w:164,h:28};   // 「現在の自機」パネルの右上
+// 編集画面：画面いっぱい（横長の端末では左右の余白まで）に広げる。座標は「高さ540」を基準にした論理座標（横幅LWは画面の比率で決まる）
+const CE={H:540,R:4,C:40,K:40/(24*PS),CY:262,TX:76,GX0:176,ALPHA:.22};
+function ceLay(){ const cvs=$('custCv'), w=innerWidth, h=innerHeight, dpr=Math.min(2,devicePixelRatio||1), LW=Math.max(960,CE.H*w/h), sc=h/CE.H;
+  if(cvs.width!==Math.round(w*dpr)||cvs.height!==Math.round(h*dpr)){ cvs.width=Math.round(w*dpr); cvs.height=Math.round(h*dpr); }
+  const s2=Math.min(h/CE.H,w/LW); const CX=CE.GX0+CE.R*CE.C+CE.C/2;
+  return {cvs,dpr,LW,sc:s2,ox:(w-LW*s2)/2,oy:(h-CE.H*s2)/2,CX,
+    pn:{x:LW-32-270,y:82,w:270,h:360},
+    ok:{x:LW-32-120,y:470,w:120,h:40}, ng:{x:LW-32-120-12-120,y:470,w:120,h:40}, clr:{x:LW-32-120-12-120-12-150,y:470,w:150,h:40}}; }
+function cePos(o,n,L){ return o.c?{x:L.CX+o.c[0]*CE.C,y:CE.CY+o.c[1]*CE.C}:{x:CE.TX,y:CE.CY+(n*2-3)*CE.C}; }   // 置き場はマスの3・1・-1・-3段目の行にそろえる
+// 右の調整パネルのボタン（選択中のオプションに作用）
+function cePad(L){ const P=L.pn, cx=P.x+P.w/2, cy=P.y+138, b=58, g=6;
+  return {up:{x:cx-b/2,y:cy-b*1.5-g,w:b,h:b,d:[0,-1]},dn:{x:cx-b/2,y:cy+b/2+g,w:b,h:b,d:[0,1]},lf:{x:cx-b*1.5-g,y:cy-b/2,w:b,h:b,d:[-1,0]},rt:{x:cx+b/2+g,y:cy-b/2,w:b,h:b,d:[1,0]},
+    ccw:{x:P.x+14,y:P.y+P.h-70,w:(P.w-40)/2,h:58,r:-1},cw:{x:P.x+P.w/2+6,y:P.y+P.h-70,w:(P.w-40)/2,h:58,r:1},cx,cy}; }
+function ceNudge(C,d){ if(C.sel<0)return; const o=C.opts[C.sel]; if(!o.c)return; const c=[o.c[0]+d[0],o.c[1]+d[1]];
+  if(Math.abs(c[0])>CE.R||Math.abs(c[1])>CE.R||(!c[0]&&!c[1])){ sfx.back(); return; }
+  const other=C.opts.find(q=>q!==o&&q.c&&q.c[0]===c[0]&&q.c[1]===c[1]); if(other) other.c=o.c; o.c=c; sfx.cursor(); }   // 行き先が埋まっていれば入れ替え
+function ceTurn(C,r){ if(C.sel<0||!C.opts[C.sel].c)return; const o=C.opts[C.sel]; o.a=(o.a+r+16)%16; sfx.cursor(); }
+function openCustom(S){ S.cust={opts:(customF||[0,1,2,3].map(()=>({c:null,a:0}))).map(o=>({c:o.c?[...o.c]:null,a:o.a})),sel:-1,drag:null,ring:false,shots:[],f:0}; S.sel=null;
+  $('custOv').classList.remove('hidden'); document.body.classList.add('inCust'); sfx.decide(); }
+function closeCustom(S,save){ const C=S.cust; if(save){ if(!C.opts.every(o=>o.c))return; customF=C.opts.map(o=>({c:[...o.c],a:o.a})); lsSet(CUST_KEY,customF); syncCusBtn(); sfx.decide(); shopSay('{DR}、オプションの配置を記録しました。CUSTOMで適用します'); } else sfx.back();
+  S.cust=null; $('custOv').classList.add('hidden'); document.body.classList.remove('inCust'); }
+function ceXY(e){ const L=ceLay(), r=L.cvs.getBoundingClientRect(); return [(e.clientX-r.left-L.ox)/L.sc,(e.clientY-r.top-L.oy)/L.sc,L]; }
+function ceCell(x,y,L){ const i=Math.round((x-L.CX)/CE.C), j=Math.round((y-CE.CY)/CE.C);
+  if(Math.abs(i)>CE.R||Math.abs(j)>CE.R||(i===0&&j===0))return null; if(Math.hypot(x-(L.CX+i*CE.C),y-(CE.CY+j*CE.C))>CE.C*.7)return null; return [i,j]; }
+const CE_RING=()=>CE.C*1.3;
+function ceSetAng(C,x,y,L){ const o=C.opts[C.sel], p=cePos(o,C.sel,L); o.a=((Math.round(Math.atan2(y-p.y,x-p.x)/CSTEP))%16+16)%16; }
+function ceDown(S,x,y,L){ const C=S.cust;
+  if(inR(x,y,L.ok)){ closeCustom(S,true); return; } if(inR(x,y,L.ng)){ closeCustom(S,false); return; }
+  if(inR(x,y,L.clr)){ C.opts.forEach(o=>{ o.c=null; o.a=0; }); C.sel=-1; sfx.back(); return; }
+  { const P=cePad(L); for(const k of ['up','dn','lf','rt']) if(inR(x,y,P[k])){ C.hit={k,f:8}; ceNudge(C,P[k].d); return; }
+    for(const k of ['ccw','cw']) if(inR(x,y,P[k])){ C.hit={k,f:8}; ceTurn(C,P[k].r); return; }
+    if(inR(x,y,L.pn)) return; }   // パネルの余白をタップしても選択は外さない
+  for(let k=3;k>=0;k--){ const p=cePos(C.opts[k],k,L); if(Math.hypot(x-p.x,y-p.y)<17){ C.sel=k; C.drag={k,x,y,moved:false}; sfx.cursor(); return; } }
+  if(C.sel>=0&&C.opts[C.sel].c){ const p=cePos(C.opts[C.sel],C.sel,L); if(Math.abs(Math.hypot(x-p.x,y-p.y)-CE_RING())<16){ C.ring=true; ceSetAng(C,x,y,L); return; } }
+  C.sel=-1; }
+function ceMove(S,x,y,L){ const C=S.cust; if(C.ring){ ceSetAng(C,x,y,L); return; } if(C.drag){ if(Math.hypot(x-C.drag.x,y-C.drag.y)>4)C.drag.moved=true; C.drag.x=x; C.drag.y=y; } }
+function ceUp(S,L){ const C=S.cust; if(C.ring){ C.ring=false; sfx.cursor(); return; } const D=C.drag; if(!D)return; C.drag=null; if(!D.moved)return; const o=C.opts[D.k], c=ceCell(D.x,D.y,L);
+  if(c){ const other=C.opts.find(q=>q!==o&&q.c&&q.c[0]===c[0]&&q.c[1]===c[1]); if(other) other.c=o.c; o.c=c; sfx.select(); }   // 埋まっているマスなら入れ替え
+  else if(D.x<CE.GX0-10){ o.c=null; if(C.sel===D.k)C.sel=-1; } }   // 置き場へ戻す
+function drawCustom(S){ const C=S.cust, L=ceLay(), c2=L.cvs.getContext('2d'), keep=ctx; C.f++;
+  c2.setTransform(1,0,0,1,0,0); c2.fillStyle='#05020f'; c2.fillRect(0,0,L.cvs.width,L.cvs.height);
+  c2.setTransform(L.sc*L.dpr,0,0,L.sc*L.dpr,L.ox*L.dpr,L.oy*L.dpr); ctx=c2;   // 実機の描画関数をこのキャンバスで使う
+  try{
+  const LW=L.LW, top=CE.CY-CE.R*CE.C-CE.C/2, bot=CE.CY+CE.R*CE.C+CE.C/2, gL=L.CX-CE.R*CE.C-CE.C/2, gR=L.CX+CE.R*CE.C+CE.C/2;
+  ctx.fillStyle='#0f0726'; ctx.fillRect(12,12,LW-24,CE.H-24); ctx.strokeStyle='#3ef2d0'; ctx.lineWidth=1.5; ctx.strokeRect(12.5,12.5,LW-25,CE.H-25);
+  ctx.textBaseline='middle'; ctx.textAlign='left'; ctx.font="30px 'VT323','DotGothic16',monospace"; ctx.fillStyle='#e9e4ff'; ctx.fillText('FORMATION CUSTOM',32,40);
+  // 置き場（配置エリアと同じ高さ）
+  ctx.setLineDash([4,4]); ctx.strokeStyle='#3a2d66'; ctx.lineWidth=1; ctx.strokeRect(CE.TX-30+.5,top+.5,60,bot-top); ctx.setLineDash([]);
+  ctx.font='12px DotGothic16'; ctx.fillStyle='#8f86b8'; ctx.textAlign='center'; ctx.fillText('置き場',CE.TX,top-12);
+  // 射線のプレビューが流れる範囲（配置エリアから画面右端まで）
+  ctx.fillStyle='rgba(20,10,48,.55)'; ctx.fillRect(gL,top,LW-24-gL,bot-top);
+  ctx.strokeStyle='rgba(138,127,184,.25)'; ctx.strokeRect(gL+.5,top+.5,gR-gL,bot-top);
+  for(let i=-CE.R;i<=CE.R;i++) for(let j=-CE.R;j<=CE.R;j++){ if(!i&&!j)continue; const x=L.CX+i*CE.C, y=CE.CY+j*CE.C, hc=C.drag&&C.drag.moved?ceCell(C.drag.x,C.drag.y,L):null, hov=hc&&hc[0]===i&&hc[1]===j;
+    ctx.fillStyle=hov?'rgba(62,242,208,.55)':'rgba(138,127,184,.35)'; const r=hov?5:2; ctx.fillRect(x-r,y-r,r*2,r*2); }
+  ctx.save(); ctx.beginPath(); ctx.rect(gL,top,LW-24-gL,bot-top); ctx.clip();
+  C.opts.forEach((o,k)=>{ if(!o.c)return; const p=cePos(o,k,L), a=o.a*CSTEP; ctx.strokeStyle='rgba(62,242,208,.3)'; ctx.setLineDash([3,6]); ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(p.x,p.y); ctx.lineTo(p.x+Math.cos(a)*2000,p.y+Math.sin(a)*2000); ctx.stroke(); ctx.setLineDash([]);
+    if(C.f%18===(k*4)%18) C.shots.push({x:p.x,y:p.y,vx:Math.cos(a)*9,vy:Math.sin(a)*9}); });
+  if(C.f%18===0) C.shots.push({x:L.CX+38*PS*CE.K,y:CE.CY,vx:10,vy:0});
+  C.shots.forEach(b=>{ b.x+=b.vx; b.y+=b.vy; }); C.shots=C.shots.filter(b=>b.x>gL-10&&b.x<LW&&b.y>top-10&&b.y<bot+10);
+  ctx.fillStyle='#c8fff4'; C.shots.forEach(b=>{ ctx.beginPath(); ctx.arc(b.x,b.y,3,0,7); ctx.fill(); }); ctx.restore();
+  // 右の調整パネル（弾はこの後ろを通る）
+  { const P=L.pn, D=cePad(L), o=C.sel>=0?C.opts[C.sel]:null, en=!!(o&&o.c);
+    ctx.fillStyle='rgba(15,7,38,.93)'; ctx.fillRect(P.x,P.y,P.w,P.h); ctx.strokeStyle='#3a2d66'; ctx.lineWidth=1; ctx.strokeRect(P.x+.5,P.y+.5,P.w-1,P.h-1);
+    ctx.textAlign='center'; ctx.font='13px DotGothic16'; ctx.fillStyle='#bfb6e6'; ctx.fillText(en?'選択中のオプション':o?'マスに置くと調整できます':'オプションを選んでください',D.cx,P.y+22);
+    ctx.font='13px DotGothic16'; ctx.fillStyle='#8f86b8'; ctx.textAlign='left'; ctx.fillText('位置',P.x+16,P.y+62); ctx.textAlign='center';
+    const pb=(r,k,draw)=>{ const hit=C.hit&&C.hit.k===k&&C.hit.f>0; ctx.globalAlpha=en?1:.3; ctx.fillStyle=hit?'#3ef2d0':'#1a0e38'; ctx.fillRect(r.x,r.y,r.w,r.h); ctx.strokeStyle='#6a5aa0'; ctx.lineWidth=1.2; ctx.strokeRect(r.x+.5,r.y+.5,r.w-1,r.h-1); ctx.fillStyle=hit?'#05020f':'#e9e4ff'; ctx.strokeStyle=ctx.fillStyle; draw(r.x+r.w/2,r.y+r.h/2); ctx.globalAlpha=1; };
+    const tri=(x,y,a)=>{ ctx.beginPath(); ctx.moveTo(x+Math.cos(a)*13,y+Math.sin(a)*13); ctx.lineTo(x+Math.cos(a+2.3)*11,y+Math.sin(a+2.3)*11); ctx.lineTo(x+Math.cos(a-2.3)*11,y+Math.sin(a-2.3)*11); ctx.closePath(); ctx.fill(); };
+    pb(D.up,'up',(x,y)=>tri(x,y,-Math.PI/2)); pb(D.dn,'dn',(x,y)=>tri(x,y,Math.PI/2)); pb(D.lf,'lf',(x,y)=>tri(x,y,Math.PI)); pb(D.rt,'rt',(x,y)=>tri(x,y,0));
+    if(o){ ctx.fillStyle='#05021a'; ctx.beginPath(); ctx.arc(D.cx,D.cy,15,0,7); ctx.fill(); ctx.strokeStyle='#3ef2d0'; ctx.lineWidth=1.5; ctx.stroke(); ctx.fillStyle='#fff'; ctx.font="bold 20px 'VT323',monospace"; ctx.fillText(C.sel+1,D.cx,D.cy+1); }
+    // 射線の向き：小さな目盛り盤と、反時計回り／時計回りのボタン
+    const dy=P.y+P.h-96; ctx.font='13px DotGothic16'; ctx.fillStyle='#8f86b8'; ctx.textAlign='left'; ctx.fillText('射線の向き',P.x+16,dy); ctx.textAlign='center';
+    ctx.globalAlpha=en?1:.3; ctx.strokeStyle='rgba(138,127,184,.6)'; ctx.lineWidth=1; ctx.beginPath(); ctx.arc(P.x+P.w-40,dy,16,0,7); ctx.stroke();
+    for(let k=0;k<16;k++){ const a=k*CSTEP; ctx.fillStyle=o&&k===o.a?'#3ef2d0':'rgba(233,228,255,.35)'; ctx.fillRect(P.x+P.w-40+Math.cos(a)*16-1.5,dy+Math.sin(a)*16-1.5,3,3); }
+    if(o){ const a=o.a*CSTEP; ctx.strokeStyle='#3ef2d0'; ctx.lineWidth=2.5; ctx.beginPath(); ctx.moveTo(P.x+P.w-40,dy); ctx.lineTo(P.x+P.w-40+Math.cos(a)*13,dy+Math.sin(a)*13); ctx.stroke(); }
+    ctx.globalAlpha=1;
+    // 回転の矢印：上側に切れ目のある円弧＋先端の矢じり（右回り＝時計回り↻、左回り＝反時計回り↺）
+    const arcArrow=(x,y,dir)=>{ ctx.save(); ctx.translate(x,y); if(dir<0) ctx.scale(-1,1);   // 右回り↻を描き、左回り↺は左右反転
+      const r=11, T=-Math.PI/2, gap=.6, s0=T+gap, e0=T-gap+2*Math.PI;
+      ctx.lineWidth=2.6; ctx.lineCap='round'; ctx.beginPath(); ctx.arc(0,0,r,s0,e0); ctx.stroke(); ctx.lineCap='butt';
+      const ex=Math.cos(e0)*r, ey=Math.sin(e0)*r, tx=-Math.sin(e0), ty=Math.cos(e0), nx=Math.cos(e0), ny=Math.sin(e0);
+      ctx.beginPath(); ctx.moveTo(ex+tx*7,ey+ty*7); ctx.lineTo(ex-tx*2+nx*6,ey-ty*2+ny*6); ctx.lineTo(ex-tx*2-nx*6,ey-ty*2-ny*6); ctx.closePath(); ctx.fill(); ctx.restore(); };
+    pb(D.ccw,'ccw',(x,y)=>{ arcArrow(x-26,y,-1); ctx.font='14px DotGothic16'; ctx.textAlign='left'; ctx.fillText('左回り',x-8,y+1); ctx.textAlign='center'; });
+    pb(D.cw,'cw',(x,y)=>{ arcArrow(x-26,y,1); ctx.font='14px DotGothic16'; ctx.textAlign='left'; ctx.fillText('右回り',x-8,y+1); ctx.textAlign='center'; });
+    if(C.hit&&C.hit.f>0)C.hit.f--; }
+  // 自機（現在の姿・半透明）
+  { const k=L.sc*L.dpr, off=CE.off||(CE.off=document.createElement('canvas')), ow=Math.round(320*k), oh=Math.round(220*k);   // 機体は内部で不透明度を上書きするので、別の画面に描いてから半透明で貼る
+    if(off.width!==ow||off.height!==oh){ off.width=ow; off.height=oh; } const oc=off.getContext('2d'); oc.setTransform(1,0,0,1,0,0); oc.clearRect(0,0,ow,oh);
+    oc.setTransform(k,0,0,k,ow/2,oh/2); ctx=oc; ctx.save(); ctx.scale(CE.K,CE.K); drawShip(0,0,false); ctx.restore(); ctx=c2;
+    ctx.save(); ctx.globalAlpha=CE.ALPHA; ctx.drawImage(off,L.CX-160,CE.CY-110,320,220); ctx.restore(); }
+  // オプション（実際の見た目）＋番号
+  C.opts.forEach((o,k)=>{ let p=cePos(o,k,L); if(C.drag&&C.drag.k===k&&C.drag.moved) p={x:C.drag.x,y:C.drag.y};
+    ctx.save(); ctx.translate(p.x,p.y); ctx.scale(CE.K*.9,CE.K*.9); drawOrb(0,0); ctx.restore();
+    if(k===C.sel){ ctx.strokeStyle='#3ef2d0'; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(p.x,p.y,18,0,7); ctx.stroke(); }
+    const bx=p.x+13, by=p.y-13; ctx.fillStyle='#05021a'; ctx.beginPath(); ctx.arc(bx,by,10,0,7); ctx.fill(); ctx.strokeStyle=k===C.sel?'#3ef2d0':'#ffd23e'; ctx.lineWidth=1.5; ctx.stroke();
+    ctx.fillStyle='#fff'; ctx.font="bold 15px 'VT323',monospace"; ctx.textAlign='center'; ctx.fillText(k+1,bx,by+1); });
+  // 方向の輪（16方向）
+  if(C.sel>=0&&C.opts[C.sel].c&&!(C.drag&&C.drag.moved)){ const o=C.opts[C.sel], p=cePos(o,C.sel,L), RR=CE_RING();
+    ctx.strokeStyle='rgba(62,242,208,.45)'; ctx.lineWidth=1; ctx.beginPath(); ctx.arc(p.x,p.y,RR,0,7); ctx.stroke();
+    for(let k=0;k<16;k++){ const a=k*CSTEP, on=k===o.a; ctx.fillStyle=on?'#3ef2d0':'rgba(233,228,255,.65)'; ctx.beginPath(); ctx.arc(p.x+Math.cos(a)*RR,p.y+Math.sin(a)*RR,on?6:3,0,7); ctx.fill(); }
+    ctx.strokeStyle='#3ef2d0'; ctx.lineWidth=2.5; ctx.beginPath(); ctx.moveTo(p.x+Math.cos(o.a*CSTEP)*20,p.y+Math.sin(o.a*CSTEP)*20); ctx.lineTo(p.x+Math.cos(o.a*CSTEP)*(RR-8),p.y+Math.sin(o.a*CSTEP)*(RR-8)); ctx.stroke(); }
+  // 下段：操作説明（左）とボタン（右）
+  ctx.textAlign='left'; ctx.font='12px DotGothic16'; ctx.fillStyle='#bfb6e6';
+  ['①〜④をドラッグしてマスに置きます','置いたオプションをタップし、輪の目盛りで向きを選択','マスの外へ出すと置き場に戻ります（4個未満は①から使用）'].forEach((l,i)=>ctx.fillText(l,32,474+i*18));
+  const all=C.opts.every(o=>o.c), btn=(r,s,col,en)=>{ ctx.globalAlpha=en?1:.35; ctx.fillStyle='#140a2a'; ctx.fillRect(r.x,r.y,r.w,r.h); ctx.strokeStyle=col; ctx.lineWidth=1.5; ctx.strokeRect(r.x+.5,r.y+.5,r.w-1,r.h-1); ctx.fillStyle=col; ctx.textAlign='center'; ctx.font='16px DotGothic16'; ctx.fillText(s,r.x+r.w/2,r.y+r.h/2+1); ctx.globalAlpha=1; };
+  btn(L.clr,'すべて外す','#8f86b8',true); btn(L.ng,'CANCEL','#bfb6e6',true); btn(L.ok,'OK','#3ef2d0',all);
+  } finally { ctx=keep; } }
+// 編集画面の操作（画面いっぱいのオーバーレイで受ける）
+{ const ov=$('custOv'), S=()=>state==='warp'&&warp&&warp.shop&&warp.shop.cust?warp.shop:null;
+  ov.addEventListener('pointerdown',e=>{ e.stopPropagation(); e.preventDefault(); const sh=S(); if(!sh)return; ov.setPointerCapture(e.pointerId); const [x,y,L]=ceXY(e); ceDown(sh,x,y,L); });
+  ov.addEventListener('pointermove',e=>{ const sh=S(); if(!sh)return; const [x,y,L]=ceXY(e); ceMove(sh,x,y,L); });
+  ov.addEventListener('pointerup',e=>{ const sh=S(); if(!sh)return; const [,,L]=ceXY(e); ceUp(sh,L); });
+  ov.addEventListener('touchstart',e=>e.stopPropagation(),{passive:true}); }
 function drawShop(w){ const S=w.shop, cols=shopItems(), cur=cols[S.col][S.row[S.col]];
   ctx.save(); drawBgOf(stage); ctx.fillStyle='rgba(8,3,20,.86)'; ctx.fillRect(0,0,W,H);
   ctx.textBaseline='middle'; ctx.textAlign='right'; ctx.font='16px DotGothic16'; ctx.fillStyle='#bfb6e6'; ctx.fillText('SCORE '+score.toLocaleString(),W-24,62);
@@ -3723,6 +3843,8 @@ function drawShop(w){ const S=w.shop, cols=shopItems(), cur=cols[S.col][S.row[S.
   // 現在の自機
   const px=640,py=150,pw=W-24-640; ctx.fillStyle='#110824'; ctx.fillRect(px,py,pw,320); ctx.strokeStyle='#2a1d4a'; ctx.lineWidth=1; ctx.strokeRect(px+.5,py+.5,pw-1,319);
   drawShopShip(S);
+  { const r=FC_BTN; ctx.fillStyle='#0c1c24'; ctx.fillRect(r.x,r.y,r.w,r.h); ctx.strokeStyle='#3ef2d0'; ctx.lineWidth=1; ctx.strokeRect(r.x+.5,r.y+.5,r.w-1,r.h-1);
+    ctx.font="20px 'VT323','DotGothic16',monospace"; ctx.fillStyle='#3ef2d0'; ctx.textAlign='center'; ctx.fillText('FORMATION CUSTOM',r.x+r.w/2,r.y+r.h/2+1); ctx.textAlign='left'; }
   const lv=(v,m)=>v>=m?'MAX':'Lv'+v; ctx.textAlign='left'; ctx.font='13px DotGothic16'; ctx.fillStyle='#e9e4ff';
   ctx.fillText(`武器 ${WEAPON_NAMES[weapon]}`,px+12,py+238);
   ctx.fillText(`SPEED ${speedLv}　OPTION ${optionCount}　SHIELD ${shield}`,px+12,py+258);
@@ -3739,15 +3861,20 @@ function drawShop(w){ const S=w.shop, cols=shopItems(), cur=cols[S.col][S.row[S.
     ctx.fillText(it.n+(it.base?`　Lv${it.lv}→${it.lv+1>=it.mx?'MAX':it.lv+1}`:''),W/2,M.y+38);
     ctx.font='14px DotGothic16'; ctx.fillStyle='#bfb6e6'; ctx.fillText(`${it.p.toLocaleString()} CREDIT　（残り ${(credit-it.p).toLocaleString()}）　購入しますか？`,W/2,M.y+74);
     [['YES',M.yes,S.yes,'#3ef2d0'],['NO',M.no,!S.yes,'#bfb6e6']].forEach(([s,r,on,c])=>{ ctx.fillStyle=on?'#0f2a2a':'#140a2a'; ctx.fillRect(r.x,r.y,r.w,r.h); ctx.strokeStyle=c; ctx.lineWidth=on?2:1; ctx.strokeRect(r.x+.5,r.y+.5,r.w-1,r.h-1); ctx.fillStyle=c; ctx.font='17px DotGothic16'; ctx.fillText(s,r.x+r.w/2,r.y+r.h/2+1); }); }
-  ctx.restore(); drawTalk();
+  ctx.restore(); if(S.cust) drawCustom(S); else drawTalk();
   if(S.t<SHOP_FADE_IN){ ctx.fillStyle=`rgba(5,2,13,${1-S.t/SHOP_FADE_IN})`; ctx.fillRect(0,0,W,H); } }   // ショップの明転
 // ---- ショップの操作 ----
 addEventListener('keydown',e=>{ if(state!=='warp'||!warp||!warp.shop)return; const S=warp.shop, k=e.key;
+  if(S.cust){ const C=S.cust, mv={ArrowUp:[0,-1],ArrowDown:[0,1],ArrowLeft:[-1,0],ArrowRight:[1,0]}[k];
+    if(mv){ e.preventDefault(); ceNudge(C,mv); } else if(k==='q'||k==='Q') ceTurn(C,-1); else if(k==='e'||k==='E') ceTurn(C,1);
+    else if(k==='Escape'||k==='Backspace') closeCustom(S,false); else if(k==='Enter'&&!e.repeat) closeCustom(S,true); return; }
   if(S.modal){ if(['ArrowLeft','ArrowRight','a','d','A','D'].includes(k)){ S.yes=!S.yes; sfx.cursor(); } else if((k===' '||k==='Enter')&&!e.repeat) shopConfirm(S.yes); else if(k==='Backspace') shopConfirm(false); return; }
   if(k==='ArrowUp'||k==='w'||k==='W') shopMove(0,-1); else if(k==='ArrowDown'||k==='s'||k==='S') shopMove(0,1);
   else if(k==='ArrowLeft'||k==='a'||k==='A') shopMove(-1,0); else if(k==='ArrowRight'||k==='d'||k==='D') shopMove(1,0);
   else if((k===' '||k==='Enter')&&!e.repeat) shopAsk(shopItems()[S.col][S.row[S.col]]); });
 cv.addEventListener('pointerdown',e=>{ if(state!=='warp'||!warp||!warp.shop)return; const S=warp.shop, [x,y]=scaleXY(e);
+  if(S.cust)return;
+  if(!S.modal&&inR(x,y,FC_BTN)){ openCustom(S); return; }
   if(S.modal){ if(inR(x,y,SHOP_MODAL.yes)) shopConfirm(true); else if(inR(x,y,SHOP_MODAL.no)) shopConfirm(false); return; }
   const it=shopHit(x,y); if(!it)return;
   cols:{ const cs=shopItems(); for(let c=0;c<2;c++){ const r=cs[c].indexOf(cs[c].find(q=>q.k===it.k)); if(r>=0){ S.col=c; S.row[c]=r; break cols; } } }
@@ -3757,7 +3884,7 @@ cv.addEventListener('pointerdown',e=>{ if(state!=='warp'||!warp||!warp.shop)retu
   S.tapT=now; });
 cv.addEventListener('pointermove',e=>{ if(state!=='warp'||!warp||!warp.shop){ if(cv.style.cursor)cv.style.cursor=''; return; } const [x,y]=scaleXY(e), S=warp.shop;   // マウスを乗せると指カーソル
   cv.style.cursor=(S.modal?(inR(x,y,SHOP_MODAL.yes)||inR(x,y,SHOP_MODAL.no)):!!shopHit(x,y))?'pointer':''; });
-cv.addEventListener('dblclick',e=>{ if(state!=='warp'||!warp||!warp.shop||warp.shop.modal)return; const [x,y]=scaleXY(e), it=shopHit(x,y); if(it&&it.k!=='go') shopAsk(it); });   // PC：ダブルクリックで購入確認
+cv.addEventListener('dblclick',e=>{ if(state!=='warp'||!warp||!warp.shop||warp.shop.modal||warp.shop.cust)return; const [x,y]=scaleXY(e), it=shopHit(x,y); if(it&&it.k!=='go') shopAsk(it); });   // PC：ダブルクリックで購入確認
 
 function drawWarp(){
   if(warp.shop){ drawShop(warp); return; }   // ショップ（補給ポイント）
@@ -4182,9 +4309,16 @@ const FOCUS_DY={1:['sway'],2:[-30,30],3:[-30,30,'sway'],4:[-30,30,-60,60]};
 const FZ_GAP=24;   // FREEZE中のオプションの縦の間隔
 let fz=[], fzS={active:false,until:0,cdEnd:0};
 const SWAY=()=>12*Math.sin(t*.07);   // 上下の揺れ（往復約1.5秒）
+// CUSTOM：ショップで決めた配置と向き。c＝[横,縦]のマス（1マス＝CG）、a＝向き（16方向の番号）
+const CUST_KEY='gv2_custom', CG=24, CSTEP=Math.PI/8;
+let customF=(()=>{ const v=lsGet(CUST_KEY,null); return Array.isArray(v)&&v.length===4&&v.every(o=>o&&Array.isArray(o.c)&&o.c.length===2)?v:null; })();
+const custFwd=a=>{ const d=Math.abs((((a*CSTEP)+Math.PI)%(2*Math.PI))-Math.PI); return d<=Math.PI/6+1e-6; };   // 正面±30°以内
+function custHalfOf(list,n){ return list.slice(0,n).filter(o=>o.c&&custFwd(o.a)).length>=3; }   // 前向きが3個以上なら威力半分（表示はしない）
+function syncCusBtn(){ const b=$('cusBtn'); if(b) b.classList.toggle('dis',!customF); }
 function spreadSlot(i){ const sl=SPREAD_SLOTS[i]; return sl.sway?{dx:sl.dx,dy:SWAY(),ang:0}:sl; }
 function baseSlot(i){ const s=baseSlot0(i); return Object.assign({},s,{dx:s.dx*PS,dy:s.dy*PS}); }   // 自機の大きさに合わせて間隔も80%
-function baseSlot0(i){ if(optionCount===1) return {dx:58,dy:SWAY(),ang:0};   // 1個のときはどのモードでも自機正面で上下に揺れる
+function baseSlot0(i){ if(formation==='custom'&&customF){ const o=customF[i]; return {dx:o.c[0]*CG,dy:o.c[1]*CG,ang:o.a*CSTEP}; }
+  if(optionCount===1) return {dx:58,dy:SWAY(),ang:0};   // 1個のときはどのモードでも自機正面で上下に揺れる
   if(formation==='focus'){ const d=(FOCUS_DY[Math.max(1,Math.min(4,optionCount))]||[])[i]; return d==='sway'?{dx:60,dy:SWAY(),ang:0}:{dx:50,dy:d===undefined?0:d,ang:0}; } return spreadSlot(i); }
 function optSlot(i){ if(fzS.active&&fz[i]) return {abs:true,x:fz[i].x,y:fz[i].y,ang:0}; return baseSlot(i); }
 function resetFreeze(){ fzFx=[]; fz=[]; fzS={active:false,until:0,cdEnd:0}; }
@@ -4206,7 +4340,7 @@ function updateFreeze(){
   btn.classList.toggle('on',fzS.active); btn.classList.toggle('cool',!fzS.active&&t<fzS.cdEnd);
 }
 function setFormation(f){ formation=f; endFreeze(); document.querySelectorAll('#formBar button').forEach(b=>{ if(b.dataset.f!=='freeze')b.classList.toggle('on',b.dataset.f===f); }); }
-function pickFormation(f){ if(!['play','boss','warp'].includes(state)||demo)return; if(f==='freeze'){ if(state!=='warp')triggerFreeze(); return; } if(formation===f&&!fzS.active)return; setFormation(f); sfx.select(); }
+function pickFormation(f){ if(!['play','boss','warp'].includes(state)||demo)return; if(f==='custom'&&!customF)return; if(f==='freeze'){ if(state!=='warp')triggerFreeze(); return; } if(formation===f&&!fzS.active)return; setFormation(f); sfx.select(); }
 let optPts=[];
 function updateOptions(){
   while(optPts.length<optionCount) optPts.push({x:player.x,y:player.y});
@@ -4305,7 +4439,7 @@ function fireFrom(sx,sy,ang=0){
 function fire(){ const nb=bullets.length;
   fireFrom(player.x+38*PS,player.y);
   for(let i=0;i<optionCount;i++){ const p=optionPos(i), sl=optSlot(i), n0=bullets.length; fireFrom(p.x+Math.cos(sl.ang)*10,p.y+Math.sin(sl.ang)*10,sl.ang);
-    if(formation==='focus'&&!sl.abs) for(let k=n0;k<bullets.length;k++) bullets[k].dmg*=.5; }   // 集中時はオプション弾の威力を半分に
+    if((formation==='focus'||(formation==='custom'&&customF&&custHalfOf(customF,Math.min(4,optionCount))))&&!sl.abs) for(let k=n0;k<bullets.length;k++) bullets[k].dmg*=.5; }   // 集中時はオプション弾の威力を半分に
   if(base.pw) for(let k=nb;k<bullets.length;k++) bullets[k].dmg*=1+BASE_RATE*base.pw;   // POWER UP：1段階ごとに攻撃力アップ
   if(state!=='ending') ({NORMAL:sfx.shoot,D:sfx.double,T:sfx.track,W:sfx.walk,L:sfx.laser,F:sfx.fwShot,R:sfx.reflectShot})[weapon]();   // スタッフロール中の自機の射撃は無音
 }
@@ -5365,7 +5499,7 @@ function enFly(lt){ const u=lt-en.flyT; if(u<0)return;
   ctx.save(); ctx.globalAlpha=.75; ctx.translate(x,y); ctx.scale(-K,K); forceTier=4; drawShip(0,0,false); forceTier=-1; ctx.restore(); ctx.globalAlpha=1; }
 function enStaff(lt){ ctx.fillStyle='#04010c'; ctx.fillRect(0,0,W,H);
   en.stars.forEach((s,i)=>{ s.x-=s.z*.5; if(s.x<0){ s.x=W; s.y=Math.random()*H; } const a=(.4+.6*Math.abs(Math.sin(t*.02+i)))*s.z; ctx.globalAlpha=a; ctx.drawImage(glowSpr(i%3?'#c9a2ff':'#9fe8ff'),s.x-s.z*6,s.y-s.z*6,s.z*12,s.z*12); });
-  ctx.globalAlpha=1; ctx.strokeStyle='rgba(180,150,255,.08)'; ctx.lineWidth=1; ctx.beginPath(); en.stars.forEach((s,i)=>{ if(i%2)return; const q=en.stars[(i+7)%en.stars.length]; if(Math.hypot(s.x-q.x,s.y-q.y)<160){ ctx.moveTo(s.x,s.y); ctx.lineTo(q.x,q.y); } }); ctx.stroke();
+  ctx.globalAlpha=1;   // 星どうしを結ぶ線は描かない
   enRetro(lt);
   const y0=H+40-lt*ST_SPD; let y=y0; ctx.textAlign='center'; ctx.shadowColor='rgba(0,0,0,.95)'; ctx.shadowBlur=10;   // 文字は手前。ボスと重なっても読めるように影を付ける
   EN_STAFF.forEach(([k,s])=>{ const txt=withDr(s), a=clamp(Math.min((y-20)/80,(H-y)/60),0,1);
@@ -5493,6 +5627,7 @@ $('policyOk').addEventListener('click',e=>{ e.stopPropagation(); closePolicy(); 
 $('policyBtn').onclick=e=>{ e.stopPropagation(); openPolicy(); };
 addEventListener('keydown',e=>{ if(!policyOpen)return; e.stopImmediatePropagation(); if(e.key==='Escape'||e.key==='Enter'){ e.preventDefault(); closePolicy(); } },true);
 if(lsGet(POLICY_KEY,0)!==POLICY_VER)openPolicy();
+syncCusBtn();
 // ---------------- タイトル画面：発射と音量 ----------------
 $('screen').addEventListener('pointerdown',e=>{ if(e.target.closest('button')||e.target.closest('#volPanel'))return; if(state==='title')fireTitleBullet(); });
 function syncVol(){
@@ -5552,14 +5687,14 @@ document.addEventListener('click',e=>{ const b=menuBtn(e); if(!b)return;
   else sfx.select(); },true);
 document.querySelectorAll('#formBar button').forEach(b=>{ b.addEventListener('pointerdown',e=>{ e.stopPropagation(); e.preventDefault(); if(b.id==='bombBtn') useBomb(); else pickFormation(b.dataset.f); });
   b.addEventListener('touchstart',e=>e.stopPropagation(),{passive:true}); });
-addEventListener('keydown',e=>{ const f={z:'spread',x:'focus',c:'freeze'}[e.key.toLowerCase()]; if(f)pickFormation(f); if(e.key.toLowerCase()==='v'&&!e.repeat)useBomb(); });
+addEventListener('keydown',e=>{ const f={z:'spread',x:'focus',c:'freeze',b:'custom'}[e.key.toLowerCase()]; if(f)pickFormation(f); if(e.key.toLowerCase()==='v'&&!e.repeat)useBomb(); });
 
 addEventListener('keydown',e=>{ if(e.key===' '&&!e.repeat&&state==='warp'&&warp&&warp.phase===3&&warp.f>60)warp.tap=true; });   // 押しっぱなしでは進まない
-// デバッグ（Fキーでオン）中：Bでボス直前へ、Nでステージクリア扱い
+// デバッグ（Fキーでオン）中：Jでボス直前へ、Nでステージクリア扱い
 function debugKey(k){ if(!debug||state!=='play'||demo)return;
   if(k==='b'){ scroll=STAGE_LEN-320; enemies=[]; events=[]; }
   if(k==='n'){ boss=null; enemies=[]; events=[]; onStageClear(); } }
-addEventListener('keydown',e=>debugKey(e.key.toLowerCase()));
+addEventListener('keydown',e=>{ const k=e.key.toLowerCase(); if(k==='j')debugKey('b'); else if(k==='n')debugKey('n'); });   // Jでボス直前へ（BはCUSTOM）
 // デバッグ：好きなステージの最初へ飛ぶ（武器・オプション・基礎性能はそのまま）。今の難易度の到達記録もそのステージまで更新
 function debugJump(n){ if(!debug||demo||!['play','boss','warp','clear'].includes(state)||!STAGES[n])return;
   setProg(n); startStage(n); updateWeaponHud(); showToast('STAGE '+n+'（'+cfg.diff+'）'); }
