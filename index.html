@@ -3873,11 +3873,18 @@ function demoAI(){
 // オートプレイのLYSOZYME：どの向きに逃げても危ないときに使う／2つ以上持っていればボス戦で1つ使う（1つはピンチ用に残す）
 let _loopTxt='';
 let _skipMode='';
+// 画面内の「タップ / スペースで〜」の案内文：その文字のまわりだけをタップ範囲にする（描いたフレームだけ有効）
+let _tz=null;
+function tapZone(x,y,txt,al,px){ const w=ctx.measureText(txt).width, x0=al==='right'?x-w:al==='center'?x-w/2:x, P=14;
+  _tz={x:x0-P,y:y-px-P,w:w+P*2,h:px+P*2,f:t,st:state}; }
+addEventListener('pointerdown',e=>{ const z=_tz; if(!z||z.st!==state||t-z.f>3||(state!=='special'&&state!=='ending'))return;
+  const [x,y]=scaleXY(e); if(x<z.x||x>z.x+z.w||y<z.y||y>z.y+z.h)return;
+  if(state==='special') tapSpecial(); else if(state==='ending') nextEnding(); });
 function skipModeNow(){   // 右下のボタン：[NEXTを出すか, SKIPを出すか]
   if(demo)return [0,0];
   if(state==='opening'&&op) return [op.t<OP_L1+OP_LA-30, op.t<OP_L1];
-  if(state==='ending'&&en){ if(en.sc===6)return [en.lt>60,0]; return [1,en.skip]; }
-  if(state==='special'&&sp&&sp.t>=20)return [1,0];
+  if(state==='ending'&&en){ if(en.sc===6)return [0,0]; return [1,en.skip]; }   // リザルトは画面内の案内文をタップ
+  if(state==='special')return [0,0];   // 解禁演出・MISSION COMPLETEは画面内の案内文をタップ
   if(state==='warp'&&warp&&warp.phase===3&&!warp.shop&&warp.f>60)return [1,0];
   return [0,0]; }
 function updSkipBtn(){ const [n,k]=skipModeNow(), m=(n?1:0)+(k?2:0)+''; if(m===_skipMode)return; _skipMode=m;
@@ -5126,7 +5133,7 @@ function drawSpecial(){ const S=sp, T=S.t; ctx.save(); ctx.setTransform(RS,0,0,R
       ctx.globalAlpha=a; ctx.fillStyle='rgba(12,2,4,.88)'; ctx.fillRect(bx0,by0,bw,bh); ctx.strokeStyle='rgba(255,90,60,.75)'; ctx.lineWidth=1; ctx.strokeRect(bx0+.5,by0+.5,bw-1,bh-1);
       drawMedIcon(bx0+12,by0+(bh-60)/2,88,60,S.typedAt<0&&T>SP_MED+20); enText('MED-07',bx0+116,by0+26,14,'#ffb0a0');
       const txt=[...S.line].slice(0,Math.floor(S.n)).join(''); wrapTalk(txt,bw-140).forEach((l,i)=>enText(l,bx0+116,by0+54+i*24,16,'#fff'));
-      if(S.typedAt>=0&&T>S.typedAt+30){ ctx.globalAlpha=.5+.5*Math.sin(T*.1); enText('TAP / SPACE',bx0+bw-12,by0+bh-10,12,'#ff9a8a','right'); } ctx.globalAlpha=1; } }
+      if(S.typedAt>=0&&T>S.typedAt+30){ ctx.globalAlpha=.5+.5*Math.sin(T*.1); enText('TAP / SPACE',bx0+bw-12,by0+bh-10,12,'#ff9a8a','right'); tapZone(bx0+bw-12,by0+bh-10,'TAP / SPACE','right',12); } ctx.globalAlpha=1; } }
   else {   // MISSION COMPLETE
     const g=ctx.createLinearGradient(0,0,0,H); g.addColorStop(0,'#050000'); g.addColorStop(.6,'#1c0203'); g.addColorStop(1,'#3a0604'); ctx.fillStyle=g; ctx.fillRect(-20,-20,W+40,H+40);
     drawEmbers();
@@ -5135,7 +5142,7 @@ function drawSpecial(){ const S=sp, T=S.t; ctx.save(); ctx.setTransform(RS,0,0,R
     if(T>=110){ ctx.fillStyle=`rgba(255,120,60,${clamp((T-110)/30,0,1)*.7})`; ctx.fillRect(W/2-300,192,600*clamp((T-110)/30,0,1),2); }
     const rows=[[130,'PROTOCOL: LYSIS  ／  DIFFICULTY : INFERNO','#ff6a3d',24],[160,'ALL PATHOGENS ERADICATED.  THE PATIENT LIVES.','#ffd0b8',22],[200,'FINAL SCORE  '+score.toLocaleString(),'#ffe27a',34],[240,'YOU HAVE WALKED THROUGH THE INFERNO.','#ff9a6a',22]];
     rows.forEach(([st,s,c,px],i)=>{ if(T<st)return; ctx.globalAlpha=clamp((T-st)/25,0,1); opTxt(s,W/2,250+i*48,px,c,'center'); }); ctx.globalAlpha=1;
-    if(T>=300){ ctx.globalAlpha=.5+.5*Math.sin(T*.1); enText('タップ / スペースでタイトルへ',W/2,H-26,16,'#ffb0a0','center'); ctx.globalAlpha=1; }
+    if(T>=300){ ctx.globalAlpha=.5+.5*Math.sin(T*.1); enText('タップ / スペースでタイトルへ',W/2,H-26,16,'#ffb0a0','center'); tapZone(W/2,H-26,'タップ / スペースでタイトルへ','center',16); ctx.globalAlpha=1; }
     if(T<30){ ctx.fillStyle=`rgba(0,0,0,${1-T/30})`; ctx.fillRect(0,0,W,H); } }
   if(S.flash>0){ ctx.fillStyle=`rgba(255,${sp.kind==='unlock'?200:240},180,${S.flash/24})`; ctx.fillRect(0,0,W,H); }
   ctx.fillStyle='rgba(0,0,0,.08)'; for(let j=0;j<H;j+=3)ctx.fillRect(0,j,W,1);   // 走査線
@@ -5359,7 +5366,7 @@ function enResult(lt){ ctx.fillStyle='#04010c'; ctx.fillRect(0,0,W,H); en.stars.
   const fa=clamp((lt-110)/30,0,1); ctx.globalAlpha=a*fa; enText('FINAL SCORE',W/2,388,18,'#9fe8ff','center'); enText(score.toLocaleString(),W/2,420,40,'#ffe27a','center',"44px 'VT323','DotGothic16',monospace");
   if(en.newHi&&lt>150){ ctx.globalAlpha=.6+.4*Math.sin(t*.15); { ctx.font='24px DotGothic16'; const hw=ctx.measureText('HI-SCORE 更新！').width; cvStar(W/2+14-hw/2-16,462-9,11,'#ffd23e'); enText('HI-SCORE 更新！',W/2+14,462,24,'#ffd23e','center'); } }
   ctx.globalAlpha=a; ctx.save(); ctx.translate(W-120,110); ctx.scale(1.3,1.3); drawShip(0,0,false); ctx.restore();
-  if(lt>90){ ctx.globalAlpha=.5+.5*Math.sin(t*.1); enText('タップ / スペースでタイトルへ',W/2,H-30,16,'#c9a2ff','center'); } ctx.globalAlpha=1; }
+  if(lt>90){ ctx.globalAlpha=.5+.5*Math.sin(t*.1); enText('タップ / スペースでタイトルへ',W/2,H-30,16,'#c9a2ff','center'); tapZone(W/2,H-30,'タップ / スペースでタイトルへ','center',16); } ctx.globalAlpha=1; }
 
 // ---- エンディング後半（次の依頼 → 突入 → スタッフロール）：B短調・BPM150。新たな出撃へ向かう、クールで疾走感のある曲 ----
 // 構成：イントロ4小節（フィルターが開いていく）→ Aメロ8小節（16分のオクターブベース＋ゲートのかかった和音）→ サビ8小節（D長調側へ開く厚いリード）→ ブレイク4小節 → Aメロへ
