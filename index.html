@@ -135,13 +135,12 @@
   #screen h1 .sub{display:block;font-size:.42em;color:var(--plasma);letter-spacing:.3em;margin-top:6px;text-shadow:none}
   #screen{background:radial-gradient(ellipse at center,rgba(40,8,60,.35),rgba(5,2,26,.72))}
   #lzBtn.on{background:#b8fff0!important;color:#04120c!important;border-color:#b8fff0!important}
-  /* スキップ／次へ：誤タッチを防ぐため、画面右下のこのボタンだけが反応する */
-  #skipBtn{position:fixed;right:max(10px,env(safe-area-inset-right));bottom:max(10px,env(safe-area-inset-bottom));z-index:26;min-width:150px;min-height:48px;padding:8px 18px;box-sizing:border-box;
-    font:inherit;font-size:15px;letter-spacing:.08em;color:rgba(200,192,240,.9);background:rgba(10,4,30,.55);border:1.5px solid rgba(143,134,184,.7);border-radius:10px;cursor:pointer;touch-action:manipulation}
-  #skipBtn.hidden{display:none}
-  #skipBtn .bl{animation:skBlink 1.35s steps(1) infinite}
-  @keyframes skBlink{50%{opacity:.35}}
-  #skipBtn.hit{background:rgba(62,242,208,.85);color:#05021a;border-color:#3ef2d0;box-shadow:0 0 18px rgba(62,242,208,.8)}
+  /* スキップ／次へ：誤タッチを防ぐため、画面右下のボタンだけが反応する（画面の邪魔にならない小さめの大きさ） */
+  #skipBox{position:fixed;right:max(8px,env(safe-area-inset-right));bottom:max(6px,env(safe-area-inset-bottom));z-index:26;display:flex;gap:6px}
+  #skipBox.hidden,#skipBox button.hidden{display:none}
+  #skipBox button{font:inherit;font-size:11px;letter-spacing:.06em;line-height:1;padding:6px 10px;min-height:26px;box-sizing:border-box;color:rgba(200,192,240,.75);
+    background:rgba(10,4,30,.35);border:1px solid rgba(143,134,184,.5);border-radius:6px;cursor:pointer;touch-action:manipulation}
+  #skipBox button.hit{background:rgba(62,242,208,.85);color:#05021a;border-color:#3ef2d0;box-shadow:0 0 12px rgba(62,242,208,.7)}
   #loopTag{position:fixed;left:8px;bottom:6px;z-index:25;pointer-events:none;font-size:13px;letter-spacing:.1em;color:#ffd23e;text-shadow:0 0 6px #000,0 0 2px #000}
   #loopTag.hidden{display:none}
   #autoBtn.on{background:#ffd23e!important;color:#04120c!important;border-color:#ffd23e!important}
@@ -300,7 +299,7 @@
   <button id="diffBadge" class="d-NORMAL" aria-label="現在の難易度">NORMAL</button>
   <div id="dbgToast" class="hidden"></div>
   <div id="loopTag" class="hidden"></div>
-  <button id="skipBtn" class="hidden" aria-label="スキップ"></button>
+  <div id="skipBox" class="hidden"><button id="nextBtn" aria-label="次へ">NEXT ▶</button><button id="skipBtn" aria-label="スキップ">SKIP ▶▶</button></div>
   <button id="volBtn" aria-label="設定"><svg class="ic" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
   <div id="volPanel" class="hidden">
     <button id="cfgClose" aria-label="閉じる">×</button>
@@ -3874,21 +3873,24 @@ function demoAI(){
 // オートプレイのLYSOZYME：どの向きに逃げても危ないときに使う／2つ以上持っていればボス戦で1つ使う（1つはピンチ用に残す）
 let _loopTxt='';
 let _skipMode='';
-function skipModeNow(){   // 今の画面で右下のボタンが何をするか（''なら出さない）
-  if(demo)return '';
-  if(state==='opening'&&op&&op.t<OP_L1+OP_LA-30)return 'SKIP';
-  if(state==='ending'&&en){ if(en.sc===6)return en.lt>60?'NEXT':''; return en.skip?'SKIP':''; }
-  if(state==='special'&&sp&&sp.t>=20)return 'NEXT';
-  if(state==='warp'&&warp&&warp.phase===3&&!warp.shop&&warp.f>60)return 'NEXT';
-  return ''; }
-function updSkipBtn(){ const m=skipModeNow(); if(m===_skipMode)return; _skipMode=m; const b=$('skipBtn');
-  b.classList.toggle('hidden',!m); if(m) b.innerHTML='<span class="bl">TAP / SPACE : '+m+' ▶</span>'; }
-$('skipBtn').addEventListener('pointerdown',e=>{ e.stopPropagation(); e.preventDefault(); const b=$('skipBtn'); b.classList.add('hit'); setTimeout(()=>b.classList.remove('hit'),160);
-  if(state==='opening') skipOpening();
-  else if(state==='ending') skipEnding();
+function skipModeNow(){   // 右下のボタン：[NEXTを出すか, SKIPを出すか]
+  if(demo)return [0,0];
+  if(state==='opening'&&op) return [op.t<OP_L1+OP_LA-30, op.t<OP_L1];
+  if(state==='ending'&&en){ if(en.sc===6)return [en.lt>60,0]; return [1,en.skip]; }
+  if(state==='special'&&sp&&sp.t>=20)return [1,0];
+  if(state==='warp'&&warp&&warp.phase===3&&!warp.shop&&warp.f>60)return [1,0];
+  return [0,0]; }
+function updSkipBtn(){ const [n,k]=skipModeNow(), m=(n?1:0)+(k?2:0)+''; if(m===_skipMode)return; _skipMode=m;
+  $('skipBox').classList.toggle('hidden',!n&&!k); $('nextBtn').classList.toggle('hidden',!n); $('skipBtn').classList.toggle('hidden',!k); }
+function skipHit(b){ b.classList.add('hit'); setTimeout(()=>b.classList.remove('hit'),160); }
+$('nextBtn').addEventListener('pointerdown',e=>{ e.stopPropagation(); e.preventDefault(); skipHit(e.currentTarget);
+  if(state==='opening') nextOpening();
+  else if(state==='ending') nextEnding();
   else if(state==='special') tapSpecial();
   else if(state==='warp'&&warp&&warp.phase===3&&warp.f>60) warp.tap=true; });
-$('skipBtn').addEventListener('touchstart',e=>e.stopPropagation(),{passive:true});
+$('skipBtn').addEventListener('pointerdown',e=>{ e.stopPropagation(); e.preventDefault(); skipHit(e.currentTarget);
+  if(state==='opening') skipOpening(); else if(state==='ending') skipEnding(); });
+$('skipBox').addEventListener('touchstart',e=>e.stopPropagation(),{passive:true});
 function updLoopTag(){ updSkipBtn(); const on=autoPlay&&!demo&&!['title','over'].includes(state), tx=on?'AUTO LOOP '+autoLoop:''; if(tx!==_loopTxt){ _loopTxt=tx; const e=$('loopTag'); e.textContent=tx; e.classList.toggle('hidden',!on); } }
 function autoBomb(minDang){ if(bombFx||player.dead||player.enter||player.inv>0||t<autoBombT)return;
   const n=bombs+(lzInf?1:0); if(n<=0)return;
@@ -4857,8 +4859,10 @@ function startOpening(){ demo=false; $('demoTag').classList.add('hidden'); initA
   $('screen').classList.add('hidden'); $('hud').classList.add('hidden'); $('test').classList.add('hidden'); $('volPanel').classList.add('hidden'); $('volBtn').classList.add('hidden');
   startTitleBGM(); }   // BGMはタイトル曲をそのまま流す
 function endOpening(){ if(state!=='opening')return; op=null; beginGame(1); }
+const OP_SEC1=540;   // オープニングの場面の区切り：①受信＋経路 → ②任務説明 → ③起動ログ → ④カウントダウン → ⑤突入
+function nextOpening(){ if(!op)return; const b=[OP_SEC1,OP_B1,OP_L1,OP_L1+OP_LA-30].find(v=>op.t<v); if(b!=null) op.t=b; }
 function skipOpening(){ if(!op)return; if(op.t<OP_L1){ op.t=OP_L1; sfx.opGlitch(); } else if(op.t<OP_L1+OP_LA-30) op.t=OP_L1+OP_LA-30; }   // 1回目：出撃シーンへ／2回目：閃光へ
-addEventListener('keydown',e=>{ if(state==='opening'&&(e.key===' '||e.key==='Enter'||e.key==='Escape')&&!e.repeat){ e.preventDefault(); skipOpening(); } });
+addEventListener('keydown',e=>{ if(state==='opening'&&(e.key===' '||e.key==='Enter'||e.key==='Escape')&&!e.repeat){ e.preventDefault(); if(e.key==='Escape')skipOpening(); else nextOpening(); } });   // スペース／Enter：次の場面へ　Esc：一気に飛ばす
 
 // ---- 効果音（決まったフレームで鳴らす） ----
 function opSE(){ const t0=op.t, B=OP_B1, L=OP_L1;
@@ -5043,9 +5047,11 @@ function updateEnding(){ en.t++; t++; const [sc,lt]=enScene(); en.sc=sc; en.lt=l
   }        // リザルト：最初のエンディング曲に戻す
 function fadeBgm8(sec){ if(!ac||!bgmGain)return; const n=ac.currentTime; bgmGain.gain.cancelScheduledValues(n); bgmGain.gain.setValueAtTime(bgmGain.gain.value,n); bgmGain.gain.linearRampToValueAtTime(0,n+sec); }
 function unfadeBgm8(){ if(!ac||!bgmGain)return; bgmGain.gain.cancelScheduledValues(ac.currentTime); applyVolume(); }   // フェードの予約を取り消して音量を戻す
+function nextEnding(){ if(!en)return; const [sc]=enScene(); if(sc===6){ if(en.lt>60)endEnding(); return; }
+  const L=EN_SCN(); let a=0; for(let i=0;i<=sc;i++)a+=L[i]; en.t=a; }   // 今の場面の最後まで飛ばして、次の場面の最初へ
 function skipEnding(){ if(!en)return; const [sc]=enScene(); if(sc===6){ if(en.lt>60)endEnding(); return; } if(en.skip){ en.t=EN_SCN().reduce((a,b)=>a+b,0); } }
 
-addEventListener('keydown',e=>{ if(state==='ending'&&(e.key===' '||e.key==='Enter'||e.key==='Escape')&&!e.repeat){ e.preventDefault(); skipEnding(); } });
+addEventListener('keydown',e=>{ if(state==='ending'&&(e.key===' '||e.key==='Enter'||e.key==='Escape')&&!e.repeat){ e.preventDefault(); if(e.key==='Escape')skipEnding(); else nextEnding(); } });
 function endEnding(){ unfadeBgm8(); const unl=en&&en.unlockNew, inf=en&&en.infDone; en=null; op=null; neuroHeal=0; vac8Grow=0; boss=null;
   if(unl){ startSpecial('unlock'); return; }      // HARDクリア：INFERNO解禁の演出へ
   if(inf){ startSpecial('complete'); return; }    // INFERNOクリア：MISSION COMPLETEの演出へ
