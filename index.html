@@ -141,6 +141,10 @@
   #skipBox button{font:inherit;font-size:11px;letter-spacing:.06em;line-height:1;padding:6px 10px;min-height:26px;box-sizing:border-box;color:rgba(200,192,240,.75);
     background:rgba(10,4,30,.35);border:1px solid rgba(143,134,184,.5);border-radius:6px;cursor:pointer;touch-action:manipulation}
   #skipBox button.hit{background:rgba(62,242,208,.85);color:#05021a;border-color:#3ef2d0;box-shadow:0 0 12px rgba(62,242,208,.7)}
+  #loopAsk{z-index:27;background:#000}
+  #loopAsk button{min-width:120px}
+  #loopAsk button.sel{border-color:var(--plasma);color:var(--ink);box-shadow:0 0 14px rgba(62,242,208,.5)}
+  #loopAsk button:not(.sel){border-color:var(--dim);color:var(--dim);box-shadow:none}
   #loopTag{position:fixed;left:8px;bottom:6px;z-index:25;pointer-events:none;font-size:13px;letter-spacing:.1em;color:#ffd23e;text-shadow:0 0 6px #000,0 0 2px #000}
   #loopTag.hidden{display:none}
   #autoBtn.on{background:#ffd23e!important;color:#04120c!important;border-color:#ffd23e!important}
@@ -299,6 +303,9 @@
   <button id="diffBadge" class="d-NORMAL" aria-label="現在の難易度">NORMAL</button>
   <div id="dbgToast" class="hidden"></div>
   <div id="loopTag" class="hidden"></div>
+  <div id="loopAsk" class="ovl hidden"><h2 style="font-size:30px">オートプレイを終了しますか？</h2>
+    <div class="row"><button id="loopYes" class="sub">YES</button><button id="loopNo">NO</button></div>
+    <p id="loopCd"></p></div>
   <div id="skipBox" class="hidden"><button id="nextBtn" aria-label="次へ">NEXT ▶</button><button id="skipBtn" aria-label="スキップ">SKIP ▶▶</button></div>
   <button id="volBtn" aria-label="設定"><svg class="ic" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
   <div id="volPanel" class="hidden">
@@ -3871,6 +3878,23 @@ function demoAI(){
   return {dx,dy,minDang};
 }
 // オートプレイのLYSOZYME：どの向きに逃げても危ないときに使う／2つ以上持っていればボス戦で1つ使う（1つはピンチ用に残す）
+// ---- オートプレイの周回の合間：暗転して「終了しますか？」（5秒放置でNOと同じく次の周回へ） ----
+let loopAsk=null;
+function openLoopAsk(){ stopBGM(); state='loopask'; $('hud').classList.add('hidden'); $('test').classList.add('hidden');
+  loopAsk={sel:'no',left:5,iv:setInterval(()=>{ if(!loopAsk)return; loopAsk.left--; if(loopAsk.left<=0)loopAskDo('no'); else loopAskShow(); },1000)};
+  $('loopAsk').classList.remove('hidden'); loopAskShow(); }
+function loopAskShow(){ if(!loopAsk)return; $('loopYes').classList.toggle('sel',loopAsk.sel==='yes'); $('loopNo').classList.toggle('sel',loopAsk.sel==='no');
+  $('loopCd').textContent=loopAsk.left+'秒後に次の周回を開始します（LOOP '+(autoLoop+1)+'）'; }
+function loopAskDo(k){ if(!loopAsk)return; clearInterval(loopAsk.iv); loopAsk=null; $('loopAsk').classList.add('hidden');
+  if(k==='yes'){ setAuto(false); state='over'; showScreen(TITLE_HTML,'PC：矢印キー／WASDで移動、スペースで発射、Z／X／Cでフォーメーション<br>スマホ：画面をドラッグで移動（押している間は自動連射）','NEW GAME'); refreshTitleInfo(); }
+  else { autoLoop++; startOpening(); } }
+['loopYes','loopNo'].forEach(id=>{ $(id).addEventListener('pointerdown',e=>{ e.stopPropagation(); e.preventDefault(); loopAskDo(id==='loopYes'?'yes':'no'); }); });
+$('loopAsk').addEventListener('pointerdown',e=>e.stopPropagation());
+$('loopAsk').addEventListener('touchstart',e=>e.stopPropagation(),{passive:true});
+addEventListener('keydown',e=>{ if(!loopAsk)return; e.stopImmediatePropagation(); if(e.repeat)return; const k=e.key;
+  if(k==='ArrowLeft'||k==='ArrowRight'||k==='a'||k==='d'){ loopAsk.sel=loopAsk.sel==='yes'?'no':'yes'; loopAskShow(); }
+  else if(k===' '||k==='Enter'){ e.preventDefault(); loopAskDo(loopAsk.sel); }
+  else if(k==='Escape'){ e.preventDefault(); loopAskDo('yes'); } },true);
 let _loopTxt='';
 let _skipMode='';
 // 画面内の「タップ / スペースで〜」の案内文：その文字のまわりだけをタップ範囲にする（描いたフレームだけ有効）
@@ -5063,7 +5087,7 @@ function endEnding(){ unfadeBgm8(); const unl=en&&en.unlockNew, inf=en&&en.infDo
   if(unl){ startSpecial('unlock'); return; }      // HARDクリア：INFERNO解禁の演出へ
   if(inf){ startSpecial('complete'); return; }    // INFERNOクリア：MISSION COMPLETEの演出へ
   toTitleAfterClear(); }
-function toTitleAfterClear(){ if(autoPlay){ autoLoop++; op=null; neuroHeal=0; vac8Grow=0; boss=null; startOpening(); return; }   // オートプレイ：同じ難易度でNEW GAMEから次の周回へ
+function toTitleAfterClear(){ if(autoPlay){ op=null; neuroHeal=0; vac8Grow=0; boss=null; openLoopAsk(); return; }   // オートプレイ：暗転して「終了しますか？」を聞く   // オートプレイ：同じ難易度でNEW GAMEから次の周回へ
   const s=score;  op=null; neuroHeal=0; vac8Grow=0; boss=null; state='over';
   showScreen(TITLE_HTML,'PC：矢印キー／WASDで移動、スペースで発射、Z／X／Cでフォーメーション<br>スマホ：画面をドラッグで移動（押している間は自動連射）','NEW GAME');
   $('subLine').innerHTML+='<br><span style="color:#9fe8ff">'+STAR_SVG+' ALL CLEAR ── FINAL SCORE '+s.toLocaleString()+'</span>'; saveScore(); }
