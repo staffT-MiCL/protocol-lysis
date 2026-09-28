@@ -250,7 +250,7 @@
     <p>本ゲーム「PROTOCOL: LYSIS ― GaaaaaaS VADER Ⅱ」は、個人情報やプレイ内容を収集・送信しません。</p>
     <h3>端末内に保存するデータ</h3>
     <p>設定（音量・難易度・画質など）、到達ステージ、ハイスコア、途中経過、入力したプレイヤー名は、お使いの端末のブラウザ内にのみ保存されます。制作者を含め、外部の誰にも送られません。</p>
-    <p>コンフィグの「記録を削除」、またはブラウザのサイトデータ削除で消去できます。</p>
+    <p>コンフィグの「すべてのデータを削除」、またはブラウザのサイトデータ削除で消去できます。</p>
     <h3>外部サービスについて</h3>
     <p>本ゲームはGitHub Pagesで公開しています。GitHub社がセキュリティのためにアクセス記録（IPアドレス等）を取得する場合があります。詳しくは<a href="https://docs.github.com/ja/site-policy/privacy-policies/github-general-privacy-statement" target="_blank" rel="noopener noreferrer">GitHubのプライバシーステートメント</a>をご覧ください。</p>
     <h3>その他</h3>
@@ -314,7 +314,7 @@
       <div class="crow"><label>難易度</label><div class="seg" id="diffSeg"><button data-d="EASY">EASY</button><button data-d="NORMAL">NORMAL</button><button data-d="HARD">HARD</button><button data-d="INFERNO" class="inf hidden" id="infBtn">INFERNO</button></div></div>
       <div class="crow"><label>残機数</label><select id="livesSel"></select></div>
       <div class="sep"></div>
-      <div class="crow"><button class="cbtn danger" id="clearBtn">記録を削除</button></div>
+      <div class="crow"><button class="cbtn danger" id="clearBtn">すべてのデータを削除</button></div>
     </div>
     <div class="sep"></div>
     <div class="crow"><button class="cbtn" id="policyBtn">プライバシーについて</button></div>
@@ -5507,10 +5507,12 @@ $('cfgClose').onclick=e=>{ e.stopPropagation(); $('volPanel').classList.add('hid
 // スライダー・入力欄だけは通常どおり操作できるようにする
 document.addEventListener('touchmove',e=>{ if(e.target.closest&&e.target.closest('input,textarea,select,#policy .pbody'))return; if(e.cancelable)e.preventDefault(); },{passive:false});
 ['gesturestart','gesturechange'].forEach(ev=>document.addEventListener(ev,e=>e.preventDefault(),{passive:false}));
-function disarmClear(){ clearTimeout(clearArmed); clearArmed=null; $('clearBtn').classList.remove('armed'); $('clearBtn').textContent='記録を削除'; }
+function disarmClear(){ clearTimeout(clearArmed); clearArmed=null; $('clearBtn').classList.remove('armed'); $('clearBtn').textContent='すべてのデータを削除'; }
 $('clearBtn').onclick=e=>{ e.stopPropagation();
   if(!clearArmed){ $('clearBtn').classList.add('armed'); $('clearBtn').textContent='もう一度押すと削除'; clearArmed=setTimeout(disarmClear,3000); return; }
-  lsDel(LS.prog); lsDel(LS.hi); lsDel(LS.run); lsDel(LS_CLEAR); lsDel(LS_INF); lsDel(LS_INFCLR); syncCfg(); disarmClear(); $('clearBtn').textContent='削除しました'; refreshTitleInfo(); };   // INFERNOの解禁も取り消す
+  // このゲームが端末に保存しているデータ（gv2_／vader2_ で始まるもの）をすべて消し、起動直後の画面からやり直す（プライバシーポリシーも再表示される）
+  try{ Object.keys(localStorage).filter(k=>/^(gv2_|vader2_)/.test(k)).forEach(k=>localStorage.removeItem(k)); }catch(e){}
+  $('clearBtn').textContent='削除しました'; stopBGM(); setTimeout(()=>location.reload(),400); };
 syncCfg(); refreshTitleInfo();
 $('hudVol').onclick=toggleVolPanel;
 $('volBtn').onclick=toggleVolPanel;
