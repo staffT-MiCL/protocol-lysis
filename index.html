@@ -2745,7 +2745,7 @@ function updateMid8(){ const b=boss; b.ph+=.02;
   bullets.forEach(bl=>{ if(bl.dead||!canHit(bl,b)||bl.bossCd||!bulletHits(bl,b.x,b.y,b.r))return;
     if(bl.laser){ bl.hits=bl.hits||new Map(); const rec=bl.hits.get(b)||{n:0,f:0}; rec.n++; rec.f=t; bl.hits.set(b,rec); } else if(bl.reflect&&bl.bounces>0){ bl.bossCd=12; reflectBullet(bl); } else bl.dead=1;
     if(bl.fw)burst(bl.x-12,bl.y); b.hp-=bdm(bl.dmg); b.flash=3; sfx.hit(); explode(bl.x,bl.y,2,'#dff4ff');
-    if(b.hp<=0&&!b.dead){ b.hp=0; b.dead=1; b.walls=[]; addScore(10000); enemies.forEach(e=>{ if(!e.hide)explode(e.x,e.y,8); }); enemies=[]; eBullets=[]; sfx.bossDown(); shake=16; } });
+    if(b.hp<=0&&!b.dead){ b.hp=0; b.dead=1; b.walls=[]; addScore(10000); sparkPlayerBullets(); enemies.forEach(e=>{ if(!e.hide)explode(e.x,e.y,8); }); enemies=[]; eBullets=[]; sfx.bossDown(); shake=16; } });
   if(!b.dead&&!player.dead&&Math.hypot(player.x-b.x,player.y-b.y)<b.r+4*PS) killPlayer(); }
 function finishMid8(){ boss=null; state='play'; speed=1.35; mid8=2; t=Math.max(t,300); msg={text:'MID BOSS DOWN',sub:'後半エリアへ',life:150};
   for(let i=0;i<2;i++) dropItem(W*.6+i*60,H/2+(i?60:-60));
@@ -3799,6 +3799,12 @@ function startStage(n,mid){
 function saveRun(shop=false){ if(demo||autoUsed)return; lsSet(LS.run,{stage,score,credit,weapon,optionCount,shield,speedLv,bombs,base:{pw:base.pw,sh:base.sh,mv:base.mv},diff:cfg.diff,lives:cfg.lives,left:lives===Infinity?-1:lives,shop:!!shop,name:playerName,mid:stage===8&&mid8===2,time:playT}); }   // mid：ステージ8後半から再開／time：プレイ時間   // shop=true：ショップ（補給ポイント）で保存。left＝その時点の残機（∞は-1）
 
 // ---------------- エフェクト ----------------
+// ボス撃破の瞬間：自機の弾（オプションの弾も含む）を小さな光の粒にして消す。粒は弾1発につき最大4個・全体で約300個まで（軽量モードは約120個）
+function sparkPlayerBullets(){ const L=bullets.filter(b=>b.kind!=='bomb'&&b.x>-20&&b.x<W+20&&b.y>-20&&b.y<H+20); bullets=[];
+  if(!L.length)return; const cap=LQ?120:300, per=Math.min(4,cap/L.length);
+  L.forEach((b,i)=>{ const n=Math.floor(per)+(Math.random()<per%1?1:0);
+    for(let k=0;k<n;k++){ const a=Math.random()*Math.PI*2, v=.6+Math.random()*1.8;
+      particles.push({x:b.x,y:b.y,vx:Math.cos(a)*v+(b.vx||0)*.15,vy:Math.sin(a)*v,life:18+Math.random()*12,c:Math.random()<.5?'#ffffff':`hsl(${170+Math.random()*30},100%,75%)`}); } }); }
 function explode(x,y,n=16,color){ for(let i=0;i<n;i++){ const a=Math.random()*Math.PI*2,s=Math.random()*4+1;
   particles.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:30+Math.random()*30,c:color||`hsl(${Math.random()*60+300},100%,65%)`}); } }
 
@@ -5563,7 +5569,7 @@ Object.assign(sfx,{
 // ---------- 敵の出現を止める（ボム余韻中・撃破演出中は保留して、終わったら出す） ----------
 const _spawn=spawn; spawn=function(ev){ if(bombFx||MK.seq){ MK.defer.push(ev); return; } _spawn(ev); };
 // ================= ボス撃破演出 =================
-function seqStart(kind){ const b=boss; if(!b)return; stopBGM(); if(kind!=='stage')resetTalk(); msg=null; MK.stOff=0; MK.bh=null;
+function seqStart(kind){ const b=boss; if(!b)return; sparkPlayerBullets(); stopBGM(); if(kind!=='stage')resetTalk(); msg=null; MK.stOff=0; MK.bh=null;
   enemies.forEach(e=>{ if(!e.hide)explode(e.x,e.y,8); }); enemies=[]; eBullets=[]; items=[]; allyItems=[]; pickups=[]; bombFx=null; if(b.walls)b.walls=[];
   b.dead=0; b.flash=0; touch.active=false;
   const L=kind==='stage'?{small:110,big:110,wait:150}:{small:230,big:230,wait:kind==='inferno'?0:230};
