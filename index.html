@@ -324,6 +324,7 @@
     <div class="sep"></div>
     <div class="crow"><label>画質</label><div class="seg" id="gfxSeg"><button data-g="auto">AUTO</button><button data-g="hi">通常</button><button data-g="lo">軽量</button></div></div>
     <div class="crow hidden" id="vibRow"><label>振動</label><div class="seg" id="vibSeg"><button data-v="1">ON</button><button data-v="0">OFF</button></div></div>
+    <p id="vibHint" class="hidden" style="margin:2px 0 0;font-size:11px;opacity:.75">※振動しない場合は、端末の設定で「タップの振動（タッチ フィードバック）」をオンにしてください</p>
     <div class="cfgOnly">
       <div class="sep"></div>
       <div class="crow"><label>難易度</label><div class="seg" id="diffSeg"><button data-d="EASY">EASY</button><button data-d="NORMAL">NORMAL</button><button data-d="HARD">HARD</button><button data-d="INFERNO" class="inf hidden" id="infBtn">INFERNO</button></div></div>
@@ -451,7 +452,7 @@ const HAP={ opW:20, opM:70, opS:[150,60,300],                       // オープ
   mid:[80,50,120], mkSmall:15, boss:[200,80,300], bossBig:[250,80,400,80,200] };
 const HAP_PR={ miss:3, over:3, boss:3, bossBig:3, mid:2, warn:2, crystal:2, stun:2, opS:2 };   // 大事な振動は連続抑制より優先
 let hapT=0, hapP=0;
-function hap(k){ if(!HAP_OK||cfg.vib===false||demo)return; const now=performance.now(), pr=HAP_PR[k]||0;
+function hap(k,force){ if(!HAP_OK||cfg.vib===false||(demo&&!force))return; const now=performance.now(), pr=HAP_PR[k]||0;
   if(now-hapT<100&&pr<=hapP)return; hapT=now; hapP=pr; try{ navigator.vibrate(HAP[k]); }catch(e){} }
 function modeLabel(d,l){ return d+'・残機'+(l===0?'∞':l); }
 function addScore(v){ const d=Math.round(v*DIFF[cfg.diff].pts); score+=d; credit+=d; }   // スコアと同じだけCREDITも増える
@@ -4885,7 +4886,7 @@ function tickOnly(){   // 描画なしで1回分だけ進める
   else if(state==='ending'&&en) updateEnding();
   else if(state==='special'&&sp) updateSpecial(); }
 let inShopOn=false, inExplainOn=false;
-function loop(now){ requestAnimationFrame(loop); if(state==='title'||demo) hapTier=-1; else if(forceTier<0){ const tr=shipTier(); if(hapTier>=0&&tr>hapTier) hap('tier'); hapTier=tr; }   // 機体の段階が上がった瞬間（ショップで購入した時など）に振動 updLoopTag();
+function loop(now){ requestAnimationFrame(loop); if(state==='title'||demo) hapTier=-1; else if(forceTier<0){ const tr=shipTier(); if(hapTier>=0&&tr>hapTier) hap('tier'); hapTier=tr; } updLoopTag();   // hapTier：機体の段階が上がった瞬間（ショップで購入した時など）に振動
   now=now||performance.now(); let d=_lastT?now-_lastT:STEP_MS; _lastT=now;
   if(d>250) d=STEP_MS;                       // タブ切替などで長く止まった後は1回分として扱う
   _acc+=d; let n=Math.floor(_acc/STEP_MS); if(n<1) return;
@@ -4919,8 +4920,8 @@ function applyGfx(m){ gfxMode=m; _pw.frames=_pw.steps=_pw.warm=0;
     _pw.level=lv; if(lv>0){ setRes(lv>=2?.6:.75); setLQ(); } else { unsetLQ(); setRes(1); } _pw.done=lv>=2; }
   document.querySelectorAll('#gfxSeg button').forEach(b=>b.classList.toggle('on',b.dataset.g===m)); }
 function syncVib(){ document.querySelectorAll('#vibSeg button').forEach(b=>b.classList.toggle('on',(b.dataset.v==='1')===(cfg.vib!==false))); }
-if(HAP_OK) $('vibRow').classList.remove('hidden');
-document.querySelectorAll('#vibSeg button').forEach(b=>b.onclick=e=>{ e.stopPropagation(); cfg.vib=b.dataset.v==='1'; saveCfg(); syncVib(); hap('opM'); });
+if(HAP_OK){ $('vibRow').classList.remove('hidden'); $('vibHint').classList.remove('hidden'); }
+document.querySelectorAll('#vibSeg button').forEach(b=>b.onclick=e=>{ e.stopPropagation(); cfg.vib=b.dataset.v==='1'; saveCfg(); syncVib(); hap('opM',true); });   // 確認用：デモ中でも鳴らす
 syncVib();
 document.querySelectorAll('#gfxSeg button').forEach(b=>b.onclick=e=>{ e.stopPropagation(); const m=b.dataset.g;
   if(m==='auto'&&gfxMode!=='auto'){ try{ localStorage.removeItem(LQ_KEY); }catch(e){} }   // AUTOを選び直したら判定をやり直す
