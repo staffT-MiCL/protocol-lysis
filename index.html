@@ -287,7 +287,7 @@
     <button id="pauseBtn" aria-label="一時停止"><svg class="ic" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1" fill="currentColor"/><rect x="14" y="5" width="4" height="14" rx="1" fill="currentColor"/></svg></button>
     <button id="hudVol" aria-label="設定"><svg class="ic" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor"/><path d="M16.5 8.5a5 5 0 0 1 0 7"/><path d="M19 6a8.5 8.5 0 0 1 0 12"/></svg></button>
   </div>
-  <div id="formBar"><button data-f="spread">SPREAD<small>Z</small></button><button data-f="focus">FOCUS<small>X</small></button><button data-f="freeze">FREEZE<small>C</small><i class="gauge" id="fzGauge"></i></button><button data-f="custom" id="cusBtn" class="dis" aria-label="CUSTOM（ショップで設定すると使えます）">CUSTOM<small>B</small></button><button id="bombBtn" aria-label="LYSOZYME">LYSOZYME<small>V</small><span id="bombPips"></span></button></div>
+  <div id="formBar"><button data-f="spread">SPREAD<small>Z</small></button><button data-f="focus">FOCUS<small>X</small></button><button data-f="freeze">FREEZE<small>C</small><i class="gauge" id="fzGauge"></i></button><button data-f="custom" id="cusBtn" class="dis" aria-label="CUSTOM（ショップで設定すると使えます）">CUSTOM<small>V</small></button><button id="bombBtn" aria-label="LYSOZYME">LYSOZYME<small>B</small><span id="bombPips"></span></button></div>
   <div id="test" class="hidden" data-debug="1">
     <span>武器テスト</span>
     <button data-w="NORMAL">N</button><button data-w="D">D</button><button data-w="W">W</button><button data-w="T">T</button>
@@ -344,7 +344,7 @@
     </div>
     <div id="hiLine"></div>
     <div id="bottomBox">   <!-- 操作説明とクレジットは画面の一番下 -->
-    <p id="subLine">PC：矢印キー／WASDで移動、スペースで発射、Z／X／Cでフォーメーション<br>
+    <p id="subLine">PC：矢印キー／WASDで移動、スペースで発射、Z／X／C／Vでフォーメーション、BでLYSOZYME<br>
       スマホ：画面をドラッグで移動（押している間は自動連射）</p>
     <div id="credits">
       <div class="line"></div>
@@ -3595,7 +3595,7 @@ function onStageClear(){
   if(stage===8){ startEnding(); return; }
   if(STAGES[stage+1]){ playClearJingle(); state='warp'; warp={phase:0,f:0,spd:0,bulge:0,shipX:player.x,shipY:player.y,bonus:lives===Infinity?0:Math.max(lives,0)*1000,m:0}; score+=warp.bonus; credit+=warp.bonus; eBullets=[]; enemies=[]; items=[]; allyItems=[]; return; }
   playAllClearJingle(); lsDel(LS.run); state='clear'; eBullets=[]; enemies=[]; msg={text:'ALL CLEAR',sub:'SCORE '+score,life:240}; allyItems=[];
-  setTimeout(()=>{ showScreen(TITLE_HTML,'PC：矢印キー／WASDで移動、スペースで発射、Z／X／Cでフォーメーション<br>スマホ：画面をドラッグで移動（押している間は自動連射）','NEW GAME'); saveScore(); },4000);
+  setTimeout(()=>{ showScreen(TITLE_HTML,'PC：矢印キー／WASDで移動、スペースで発射、Z／X／C／Vでフォーメーション、BでLYSOZYME<br>スマホ：画面をドラッグで移動（押している間は自動連射）','NEW GAME'); saveScore(); },4000);
 }
 const WARP_LEN=[480,150,260,420];   // 段階0（結果画面）は最低8秒
 function WL(i){ return Math.round(WARP_LEN[i]*(stage===7?(i===1?1.5:i===2?1.8:1):1)); }   // ステージ7→8の最後の移動は長め（セリフが入る）
@@ -3728,15 +3728,25 @@ function autoShop(w,S){ if(S.modal||S.t<50||S.t%14)return; if(S.autoEnd){ if(S.t
 function updateShop(w){ const S=w.shop; S.t++; if(S.fx>0)S.fx--; if(S.fxBig>0)S.fxBig--; if(autoPlay&&!S.cust)autoShop(w,S);
   particles.forEach(p=>{p.x+=p.vx;p.y+=p.vy;p.vx*=.96;p.vy*=.96;p.life--;}); particles=particles.filter(p=>p.life>0); }
 // 「現在の自機」パネル：実機の描画で、オプション・シールド・試し撃ちまで表示
-function drawShopShip(S){ const px=640,py=150,pw=W-24-640,ph=220, cx=px+pw*.42, cy=py+ph/2+Math.sin(t*.04)*8, K=1.7;
+// オプションの配置：CUSTOMを登録していればカスタム、なければゲームと同じSPREAD（1個のときは正面で上下に揺れる）
+function shopSlot(i){ if(customF){ const o=customF[i]; return {dx:o.c[0]*CG,dy:o.c[1]*CG,ang:o.a*CSTEP}; }
+  return optionCount===1?{dx:58,dy:SWAY(),ang:0,sway:1}:spreadSlot(i); }
+function drawShopShip(S){ const px=640,py=150,pw=W-24-640,ph=220;
+  // 描いてよい範囲：右上のCUSTOMボタンの下〜下の文字の上（上下の揺れ8pxぶん余白をとる）
+  const AX0=px+10, AX1=px+pw-10, AY0=FC_BTN.y+FC_BTN.h+8+8, AY1=py+ph-8;
+  const sl=[]; for(let i=0;i<optionCount;i++){ const o=shopSlot(i), d=Object.assign({},o,{dx:o.dx*PS,dy:o.dy*PS}); if(customF||!o.sway) d.sw=0; else d.sw=12*PS; sl.push(d); }
+  // 自機（シールド込み）とオプションが全部入る範囲を求め、枠に収まる倍率を決める（最大1.7倍）
+  const sh=shield>0; let x0=sh?-44:-40, x1=sh?40:36, y0=sh?-38:-32, y1=-y0;
+  sl.forEach(o=>{ const r=10, ys=o.sw||0; x0=Math.min(x0,o.dx-r); x1=Math.max(x1,o.dx+r); y0=Math.min(y0,(o.sway?0:o.dy)-r-ys); y1=Math.max(y1,(o.sway?0:o.dy)+r+ys); });
+  const K=Math.min(1.7,(AX1-AX0)/(x1-x0),(AY1-AY0)/(y1-y0)), cx=(AX0+AX1)/2-(x0+x1)/2*K, cy=(AY0+AY1)/2-(y0+y1)/2*K+Math.sin(t*.04)*8;
   ctx.save(); ctx.beginPath(); ctx.rect(px,py,pw,ph); ctx.clip();
-  const orbs=[]; for(let i=0;i<optionCount;i++) orbs.push([cx-40-i*22,cy+(i%2?1:-1)*(44+Math.floor(i/2)*22)+Math.sin(t*.1+i)*3]);
-  if(t%40===0){ const shooters=[[cx+34*K*PS,cy],...orbs]; shooters.forEach(([sx,sy])=>{ const b={x:sx,y:sy,vx:9,vy:0,r:4,kind:{NORMAL:'normal',D:'double',T:'track',W:'wave',L:'laser',F:'fw',R:'reflect'}[weapon],len:0,bounces:3,life:60}; if(weapon==='D'){ S.shots.push({...b,y:sy-6},{...b,y:sy+6}); } else S.shots.push(b); }); }
-  S.shots=S.shots.filter(b=>--b.life>0&&b.x<px+pw+40); S.shots.forEach(b=>{ b.x+=b.vx; if(b.kind==='laser')b.len=Math.min(160,b.len+b.vx); drawBullet(b); });
-  orbs.forEach(([ox,oy])=>drawOrb(ox,oy));
+  const orbs=sl.map(o=>[cx+o.dx*K,cy+o.dy*K,o.ang||0]);
+  if(t%40===0){ const shooters=[[cx+34*K*PS,cy,0],...orbs]; shooters.forEach(([sx,sy,a])=>{ const sp=9, b={x:sx,y:sy,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,r:4,kind:{NORMAL:'normal',D:'double',T:'track',W:'wave',L:'laser',F:'fw',R:'reflect'}[weapon],len:0,bounces:3,life:60}; if(weapon==='D'){ S.shots.push({...b,y:sy-6},{...b,y:sy+6}); } else S.shots.push(b); }); }
+  S.shots=S.shots.filter(b=>--b.life>0&&b.x<px+pw+40&&b.x>px-40&&b.y>py-40&&b.y<py+ph+40); S.shots.forEach(b=>{ b.x+=b.vx; b.y+=b.vy||0; if(b.kind==='laser')b.len=Math.min(160*K/1.7,b.len+Math.abs(b.vx)); drawBullet(b); });
+  orbs.forEach(([ox,oy])=>{ ctx.save(); ctx.translate(ox,oy); ctx.scale(K,K); drawOrb(0,0); ctx.restore(); });
   ctx.save(); ctx.translate(cx,cy); ctx.scale(K,K); drawShip(0,0,false); drawShield(0,0); ctx.restore();
-  if(S.fx>0){ ctx.strokeStyle=`rgba(255,210,62,${S.fx/30})`; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(cx,cy,80-S.fx*1.5,0,7); ctx.stroke(); }
-  if(S.fxBig>0){ ctx.strokeStyle=shipTier()===4?`rgba(255,40,60,${S.fxBig/50})`:`rgba(255,255,255,${S.fxBig/50})`; ctx.lineWidth=4; ctx.beginPath(); ctx.arc(cx,cy,150-S.fxBig*2.5,0,7); ctx.stroke(); }
+  if(S.fx>0){ ctx.strokeStyle=`rgba(255,210,62,${S.fx/30})`; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(cx,cy,(80-S.fx*1.5)*K/1.7,0,7); ctx.stroke(); }
+  if(S.fxBig>0){ ctx.strokeStyle=shipTier()===4?`rgba(255,40,60,${S.fxBig/50})`:`rgba(255,255,255,${S.fxBig/50})`; ctx.lineWidth=4; ctx.beginPath(); ctx.arc(cx,cy,(150-S.fxBig*2.5)*K/1.7,0,7); ctx.stroke(); }
   ctx.restore(); }
 const FC_BTN={x:640+296-172,y:158,w:164,h:28};   // 「現在の自機」パネルの右上
 // 編集画面：画面いっぱい（横長の端末では左右の余白まで）に広げる。座標は「高さ540」を基準にした論理座標（横幅LWは画面の比率で決まる）
@@ -4035,7 +4045,7 @@ function openLoopAsk(){ stopBGM(); state='loopask'; $('hud').classList.add('hidd
 function loopAskShow(){ if(!loopAsk)return; $('loopYes').classList.toggle('sel',loopAsk.sel==='yes'); $('loopNo').classList.toggle('sel',loopAsk.sel==='no');
   $('loopCd').textContent=loopAsk.left+'秒後に次の周回を開始します（LOOP '+(autoLoop+1)+'）'; }
 function loopAskDo(k){ if(!loopAsk)return; clearInterval(loopAsk.iv); loopAsk=null; $('loopAsk').classList.add('hidden');
-  if(k==='yes'){ setAuto(false); state='over'; showScreen(TITLE_HTML,'PC：矢印キー／WASDで移動、スペースで発射、Z／X／Cでフォーメーション<br>スマホ：画面をドラッグで移動（押している間は自動連射）','NEW GAME'); refreshTitleInfo(); }
+  if(k==='yes'){ setAuto(false); state='over'; showScreen(TITLE_HTML,'PC：矢印キー／WASDで移動、スペースで発射、Z／X／C／Vでフォーメーション、BでLYSOZYME<br>スマホ：画面をドラッグで移動（押している間は自動連射）','NEW GAME'); refreshTitleInfo(); }
   else { autoLoop++; startOpening(); } }
 ['loopYes','loopNo'].forEach(id=>{ $(id).addEventListener('pointerdown',e=>{ e.stopPropagation(); e.preventDefault(); loopAskDo(id==='loopYes'?'yes':'no'); }); });
 $('loopAsk').addEventListener('pointerdown',e=>e.stopPropagation());
@@ -4097,7 +4107,7 @@ function stopDemo(){ if(!demo)return; gTimers=[]; demo=false; boss=null; idleTim
   $('enter').style.display='none'; document.body.classList.add('started');   // 「はじめる」画面には戻さない
   msg=null; bullets=[];eBullets=[];enemies=[];items=[];particles=[];
   state='title';
-  showScreen(TITLE_HTML,'PC：矢印キー／WASDで移動、スペースで発射、Z／X／Cでフォーメーション<br>スマホ：画面をドラッグで移動（押している間は自動連射）','NEW GAME');
+  showScreen(TITLE_HTML,'PC：矢印キー／WASDで移動、スペースで発射、Z／X／C／Vでフォーメーション、BでLYSOZYME<br>スマホ：画面をドラッグで移動（押している間は自動連射）','NEW GAME');
   if(currentBgmType!=='title')startTitleBGM(); }
 // ---------------- ゲーム進行 ----------------
 function reset(){
@@ -4965,7 +4975,7 @@ function showPauseCfg(on){ const pn=$('volPanel'), pm=$('pauseMenu');
   else if(_vpHome){ _vpHome.p.insertBefore(pn,_vpHome.n); pn.classList.remove('inPause'); pn.classList.add('hidden'); } }
 function resumeGame(){ if(state!=='pause')return; state=pausedFrom; pausedFrom=null; muteAll(false); $('pauseMenu').classList.add('hidden'); showPauseCfg(false); }
 function quitToTitle(){ if(state!=='pause')return; $('pauseMenu').classList.add('hidden'); showPauseCfg(false); muteAll(false); stopBGM(); boss=null; warp=null; gTimers=[]; state='over';
-  showScreen(TITLE_HTML,'PC：矢印キー／WASDで移動、スペースで発射、Z／X／Cでフォーメーション<br>スマホ：画面をドラッグで移動（押している間は自動連射）','NEW GAME'); saveScore(); }
+  showScreen(TITLE_HTML,'PC：矢印キー／WASDで移動、スペースで発射、Z／X／C／Vでフォーメーション、BでLYSOZYME<br>スマホ：画面をドラッグで移動（押している間は自動連射）','NEW GAME'); saveScore(); }
 $('pauseBtn').onclick=e=>{ e.stopPropagation(); pauseGame(); };
 $('pauseBtn').addEventListener('touchstart',e=>e.stopPropagation(),{passive:true});
 $('resumeBtn').onclick=e=>{ e.stopPropagation(); resumeGame(); };
@@ -5250,7 +5260,7 @@ function endEnding(){ unfadeBgm8(); const unl=en&&en.unlockNew, inf=en&&en.infDo
   toTitleAfterClear(); }
 function toTitleAfterClear(){ if(autoPlay){ op=null; neuroHeal=0; vac8Grow=0; boss=null; openLoopAsk(); return; }   // オートプレイ：暗転して「終了しますか？」を聞く   // オートプレイ：同じ難易度でNEW GAMEから次の周回へ
   const s=score;  op=null; neuroHeal=0; vac8Grow=0; boss=null; state='over';
-  showScreen(TITLE_HTML,'PC：矢印キー／WASDで移動、スペースで発射、Z／X／Cでフォーメーション<br>スマホ：画面をドラッグで移動（押している間は自動連射）','NEW GAME');
+  showScreen(TITLE_HTML,'PC：矢印キー／WASDで移動、スペースで発射、Z／X／C／Vでフォーメーション、BでLYSOZYME<br>スマホ：画面をドラッグで移動（押している間は自動連射）','NEW GAME');
   $('subLine').innerHTML+='<br><span style="color:#9fe8ff">'+STAR_SVG+' ALL CLEAR ── FINAL SCORE '+s.toLocaleString()+'</span>'; saveScore(); }
 // ================= 特別演出：INFERNO解禁（HARDクリア後）／MISSION COMPLETE（INFERNOクリア後） =================
 let sp=null;
@@ -5714,7 +5724,7 @@ document.addEventListener('click',e=>{ const b=menuBtn(e); if(!b)return;
   else sfx.select(); },true);
 document.querySelectorAll('#formBar button').forEach(b=>{ b.addEventListener('pointerdown',e=>{ e.stopPropagation(); e.preventDefault(); if(b.id==='bombBtn') useBomb(); else pickFormation(b.dataset.f); });
   b.addEventListener('touchstart',e=>e.stopPropagation(),{passive:true}); });
-addEventListener('keydown',e=>{ const f={z:'spread',x:'focus',c:'freeze',b:'custom'}[e.key.toLowerCase()]; if(f)pickFormation(f); if(e.key.toLowerCase()==='v'&&!e.repeat)useBomb(); });
+addEventListener('keydown',e=>{ const f={z:'spread',x:'focus',c:'freeze',v:'custom'}[e.key.toLowerCase()]; if(f)pickFormation(f); if(e.key.toLowerCase()==='b'&&!e.repeat)useBomb(); });
 
 addEventListener('keydown',e=>{ if(e.key===' '&&!e.repeat&&state==='warp'&&warp&&warp.phase===3&&warp.f>60)warp.tap=true; });   // 押しっぱなしでは進まない
 // デバッグ（Fキーでオン）中：Jでボス直前へ、Nでステージクリア扱い
