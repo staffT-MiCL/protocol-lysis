@@ -3662,7 +3662,7 @@ const SHOP_DIFF_K={EASY:.5,NORMAL:1,HARD:1.5,INFERNO:2.5};   // ショップ価�
 function shopPrice(v){ return Math.round(v*SHOP_PRICE_K*SHOP_DIFF_K[cfg.diff]/100)*100; }   // 難易度の得点倍率に合わせて価格も変える
 // 商品一覧（列ごと）。位置も持たせて、描画とクリック判定の両方に使う
 // 商品枠の縦配置：上端（見出しの下）から下端（操作説明の上）までを行数で割って、枠を縦いっぱいに伸ばす
-const SHOP_TOP=164, SHOP_BOT=H-62, SHOP_GAP=6, SHOP_CAP=30;   // SHOP_CAP：列の途中に入る「BASE」見出しの高さ
+const SHOP_TOP=164, SHOP_BOT=H-62, SHOP_GAP=6, SHOP_CAP=40;   // SHOP_CAP：列の途中に入る「BASE」見出しの高さ
 const SHOP_RH=Math.floor(Math.min((SHOP_BOT-SHOP_TOP-SHOP_GAP*7)/8,(SHOP_BOT-SHOP_TOP-SHOP_CAP-SHOP_GAP*6)/7));   // 左列はWEAPON7行＋LYSOZYME、右列はEQUIP4行＋BASE3行＋見出し   // 2列とも収まる行の高さ
 const SHOP_BASE_Y=SHOP_TOP+4*(SHOP_RH+SHOP_GAP)+SHOP_CAP;   // BASEの1行目
 function shopItems(){
@@ -3750,16 +3750,16 @@ function drawShopShip(S){ const px=640,py=150,pw=W-24-640,ph=220;
   ctx.restore(); }
 const FC_BTN={x:640+296-172,y:158,w:164,h:28};   // 「現在の自機」パネルの右上
 // 編集画面：画面いっぱい（横長の端末では左右の余白まで）に広げる。座標は「高さ540」を基準にした論理座標（横幅LWは画面の比率で決まる）
-const CE={H:540,R:4,C:40,K:40/(24*PS),CY:262,TX:76,GX0:176,ALPHA:.22};
+const CE={H:540,R:4,C:36,K:36/(24*PS),CY:298,TX:76,GX0:176,ALPHA:.22};   // 上部にMED-07のセリフ枠（ショップと同じ位置）を置くため、マスを小さくして配置エリアを下げた
 function ceLay(){ const cvs=$('custCv'), w=innerWidth, h=innerHeight, dpr=Math.min(2,devicePixelRatio||1), LW=Math.max(960,CE.H*w/h), sc=h/CE.H;
   if(cvs.width!==Math.round(w*dpr)||cvs.height!==Math.round(h*dpr)){ cvs.width=Math.round(w*dpr); cvs.height=Math.round(h*dpr); }
   const s2=Math.min(h/CE.H,w/LW); const CX=CE.GX0+CE.R*CE.C+CE.C/2;
   return {cvs,dpr,LW,sc:s2,ox:(w-LW*s2)/2,oy:(h-CE.H*s2)/2,CX,
-    pn:{x:LW-32-270,y:82,w:270,h:360},
+    pn:{x:LW-32-270,y:128,w:270,h:330},
     ok:{x:LW-32-120,y:470,w:120,h:40}, ng:{x:LW-32-120-12-120,y:470,w:120,h:40}, clr:{x:LW-32-120-12-120-12-150,y:470,w:150,h:40}}; }
 function cePos(o,n,L){ return o.c?{x:L.CX+o.c[0]*CE.C,y:CE.CY+o.c[1]*CE.C}:{x:CE.TX,y:CE.CY+(n*2-3)*CE.C}; }   // 置き場はマスの3・1・-1・-3段目の行にそろえる
 // 右の調整パネルのボタン（選択中のオプションに作用）
-function cePad(L){ const P=L.pn, cx=P.x+P.w/2, cy=P.y+138, b=58, g=6;
+function cePad(L){ const P=L.pn, cx=P.x+P.w/2, cy=P.y+132, b=58, g=6;
   return {up:{x:cx-b/2,y:cy-b*1.5-g,w:b,h:b,d:[0,-1]},dn:{x:cx-b/2,y:cy+b/2+g,w:b,h:b,d:[0,1]},lf:{x:cx-b*1.5-g,y:cy-b/2,w:b,h:b,d:[-1,0]},rt:{x:cx+b/2+g,y:cy-b/2,w:b,h:b,d:[1,0]},
     ccw:{x:P.x+14,y:P.y+P.h-70,w:(P.w-40)/2,h:58,r:-1},cw:{x:P.x+P.w/2+6,y:P.y+P.h-70,w:(P.w-40)/2,h:58,r:1},cx,cy}; }
 function ceNudge(C,d){ if(C.sel<0)return; const o=C.opts[C.sel]; if(!o.c)return; const c=[o.c[0]+d[0],o.c[1]+d[1]];
@@ -3767,8 +3767,9 @@ function ceNudge(C,d){ if(C.sel<0)return; const o=C.opts[C.sel]; if(!o.c)return;
   const other=C.opts.find(q=>q!==o&&q.c&&q.c[0]===c[0]&&q.c[1]===c[1]); if(other) other.c=o.c; o.c=c; sfx.cursor(); }   // 行き先が埋まっていれば入れ替え
 function ceTurn(C,r){ if(C.sel<0||!C.opts[C.sel].c)return; const o=C.opts[C.sel]; o.a=(o.a+r+16)%16; sfx.cursor(); }
 function openCustom(S){ S.cust={opts:(customF||[0,1,2,3].map(()=>({c:null,a:0}))).map(o=>({c:o.c?[...o.c]:null,a:o.a})),sel:-1,drag:null,ring:false,shots:[],f:0}; S.sel=null;
-  $('custOv').classList.remove('hidden'); document.body.classList.add('inCust'); sfx.decide(); }
-function closeCustom(S,save){ const C=S.cust; if(save){ if(!C.opts.every(o=>o.c))return; customF=C.opts.map(o=>({c:[...o.c],a:o.a})); lsSet(CUST_KEY,customF); syncCusBtn(); sfx.decide(); shopSay('{DR}、オプションの配置を記録しました。CUSTOMで適用します'); } else sfx.back();
+  $('custOv').classList.remove('hidden'); document.body.classList.add('inCust'); sfx.decide();
+  shopSay('{DR}、オプションの配置を自由に設計できます'); talkQ.push({s:'置き場からオプションを選んで、機体のまわりの好きな位置に置いてください',cont:1},{s:'射線の向きは、左回り・右回りのボタンで調整できます',cont:1},{s:'4つすべてを配置すると記録できます。記録した配置は、戦闘中にCUSTOM（Vキー）で使えます',cont:1}); }
+function closeCustom(S,save){ const C=S.cust; if(save){ if(!C.opts.every(o=>o.c))return; customF=C.opts.map(o=>({c:[...o.c],a:o.a})); lsSet(CUST_KEY,customF); syncCusBtn(); sfx.decide(); shopSay('{DR}、オプションの配置を記録しました。CUSTOMで適用します'); } else { sfx.back(); talkQ=[]; talkCur=null; }
   S.cust=null; $('custOv').classList.add('hidden'); document.body.classList.remove('inCust'); }
 function ceXY(e){ const L=ceLay(), r=L.cvs.getBoundingClientRect(); return [(e.clientX-r.left-L.ox)/L.sc,(e.clientY-r.top-L.oy)/L.sc,L]; }
 function ceCell(x,y,L){ const i=Math.round((x-L.CX)/CE.C), j=Math.round((y-CE.CY)/CE.C);
@@ -3794,10 +3795,10 @@ function drawCustom(S){ const C=S.cust, L=ceLay(), c2=L.cvs.getContext('2d'), ke
   try{
   const LW=L.LW, top=CE.CY-CE.R*CE.C-CE.C/2, bot=CE.CY+CE.R*CE.C+CE.C/2, gL=L.CX-CE.R*CE.C-CE.C/2, gR=L.CX+CE.R*CE.C+CE.C/2;
   ctx.fillStyle='#0f0726'; ctx.fillRect(12,12,LW-24,CE.H-24); ctx.strokeStyle='#3ef2d0'; ctx.lineWidth=1.5; ctx.strokeRect(12.5,12.5,LW-25,CE.H-25);
-  ctx.textBaseline='middle'; ctx.textAlign='left'; ctx.font="30px 'VT323','DotGothic16',monospace"; ctx.fillStyle='#e9e4ff'; ctx.fillText('FORMATION CUSTOM',32,40);
+  ctx.textBaseline='middle'; ctx.textAlign='right'; ctx.font="30px 'VT323','DotGothic16',monospace"; ctx.fillStyle='#e9e4ff'; ctx.fillText('FORMATION CUSTOM',LW-32,40); ctx.textAlign='left';   // 左上はセリフ枠
   // 置き場（配置エリアと同じ高さ）
   ctx.setLineDash([4,4]); ctx.strokeStyle='#3a2d66'; ctx.lineWidth=1; ctx.strokeRect(CE.TX-30+.5,top+.5,60,bot-top); ctx.setLineDash([]);
-  ctx.font='12px DotGothic16'; ctx.fillStyle='#8f86b8'; ctx.textAlign='center'; ctx.fillText('置き場',CE.TX,top-12);
+  ctx.font='12px DotGothic16'; ctx.fillStyle='#8f86b8'; ctx.textAlign='center'; ctx.fillText('置き場',CE.TX,top+14);   // 上はセリフ枠なので枠の内側に表示
   // 射線のプレビューが流れる範囲（配置エリアから画面右端まで）
   ctx.fillStyle='rgba(20,10,48,.55)'; ctx.fillRect(gL,top,LW-24-gL,bot-top);
   ctx.strokeStyle='rgba(138,127,184,.25)'; ctx.strokeRect(gL+.5,top+.5,gR-gL,bot-top);
@@ -3854,6 +3855,7 @@ function drawCustom(S){ const C=S.cust, L=ceLay(), c2=L.cvs.getContext('2d'), ke
   ['①〜④をドラッグしてマスに置きます','置いたオプションをタップし、輪の目盛りで向きを選択','マスの外へ出すと置き場に戻ります（4個未満は①から使用）'].forEach((l,i)=>ctx.fillText(l,32,474+i*18));
   const all=C.opts.every(o=>o.c), btn=(r,s,col,en)=>{ ctx.globalAlpha=en?1:.35; ctx.fillStyle='#140a2a'; ctx.fillRect(r.x,r.y,r.w,r.h); ctx.strokeStyle=col; ctx.lineWidth=1.5; ctx.strokeRect(r.x+.5,r.y+.5,r.w-1,r.h-1); ctx.fillStyle=col; ctx.textAlign='center'; ctx.font='16px DotGothic16'; ctx.fillText(s,r.x+r.w/2,r.y+r.h/2+1); ctx.globalAlpha=1; };
   btn(L.clr,'すべて外す','#8f86b8',true); btn(L.ng,'CANCEL','#bfb6e6',true); btn(L.ok,'OK','#3ef2d0',all);
+  drawTalk();   // MED-07のセリフ（ショップと同じ位置）
   } finally { ctx=keep; } }
 // 編集画面の操作（画面いっぱいのオーバーレイで受ける）
 { const ov=$('custOv'), S=()=>state==='warp'&&warp&&warp.shop&&warp.shop.cust?warp.shop:null;
